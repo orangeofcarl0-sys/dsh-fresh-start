@@ -1,0 +1,42 @@
+{
+  "name": "dsh-fresh-start",
+  "version": "1.0.0",
+  "description": "DSH /fresh 命令：一键总结当前对话 → 开启新对话 → 归档老对话（缓解超大会话内存/卡顿，DeepSeek Harness / DSH）",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orangeofcarl0-sys/dsh-fresh-start.git"
+  },
+  "bugs": {
+    "url": "https://github.com/orangeofcarl0-sys/dsh-fresh-start/issues"
+  },
+  "homepage": "https://github.com/orangeofcarl0-sys/dsh-fresh-start#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "compact",
+    "archive",
+    "fresh"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
