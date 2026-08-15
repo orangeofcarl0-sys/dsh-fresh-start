@@ -90,6 +90,7 @@ function makeInvocation() {
   check('new session seeded with summary', recorded.created.length === 1 && recorded.created[0].seed?.[0]?.data?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
   check('seed has surfaceOp append', recorded.created[0].seed[0].surfaceOp === 'append')
   check('new session cwd+preset', recorded.created[0].meta.cwd === 'C:\\proj' && recorded.created[0].meta.agentPreset === 'code')
+  check('new session marked parentSession', recorded.created[0].meta.parentSession === 'session-old')
   check('old session archived', recorded.archived.includes('session-old'))
   check('result carries new sessionId', typeof result.sessionId === 'string')
 }
