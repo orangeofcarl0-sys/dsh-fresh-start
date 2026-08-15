@@ -1,14 +1,23 @@
 // dsh-fresh-start client 插件测试：归档老会话后自动跳转到新会话（parentId 匹配）
+import { readFileSync } from 'node:fs'
 let failures = 0
 const check = (label, cond, extra = '') => {
   console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${extra ? '  ' + extra : ''}`)
   if (!cond) failures++
 }
 
-const plugin = await import('../lib/client.js')
+// 模拟浏览器 __ModuleLoader__，执行 client.js 顶层（window.__ModuleLoader__.load）
+const factories = new Map()
+globalThis.window = { __ModuleLoader__: { load: (handoff) => { factories.set(handoff.id, handoff.factory) } } }
+const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+new Function(code)()
+const factory = factories.get('dsh-fresh-start')
+check('registered id dsh-fresh-start', factory !== void 0)
+const plugin = factory(() => { throw new Error('require not used') })
+check('factory returns apply+inject', typeof plugin.apply === 'function' && Array.isArray(plugin.inject))
 
 // 极简 snapshot store（subscribe/getSnapshot）
-function makeStore(initial, { autoNotify = false } = {}) {
+function makeStore(initial) {
   let state = { ...initial }
   const listeners = new Set()
   return {
@@ -24,25 +33,20 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
   const sessions = makeStore({ ids: [], byId: {}, current: void 0, ...initialSessions })
   const ctx = {
     workspaces: { list: workspaces },
-    sessions: {
-      list: sessions,
-      open: (id) => { opened.push(id) },
-    },
+    sessions: { list: sessions, open: (id) => { opened.push(id) } },
   }
   return { ctx, opened, workspaces, sessions }
 }
 
-// 用例 1：归档老会话 → 立即跳转到 parentId 匹配的新会话
+// 用例 1：归档老会话 → 跳转到 parentId 匹配的新会话
 {
   const { ctx, opened, workspaces, sessions } = makeCtx(
     { archivedSessionIds: ['old-1'] },
     { ids: ['old-1', 'new-1'], byId: { 'old-1': { id: 'old-1' }, 'new-1': { id: 'new-1', parentId: 'old-1' } }, current: 'old-1' },
   )
   const dispose = plugin.apply(ctx)
-  // 新归档 old-1（已存在 old-1，现在归档 old-2 → 触发）
   workspaces._set({ archivedSessionIds: ['old-1', 'old-2'] })
   check('no jump for unrelated archive', opened.length === 0, `opened=${JSON.stringify(opened)}`)
-  // 归档 new-1 的父会话？new-1 的 parentId 是 old-1，已归档。现在归档 old-3 并让 new-2 指向它
   sessions._set({ ids: ['old-1', 'new-1', 'new-2'], byId: { 'old-1': { id: 'old-1' }, 'new-1': { id: 'new-1', parentId: 'old-1' }, 'new-2': { id: 'new-2', parentId: 'old-3' } } })
   workspaces._set({ archivedSessionIds: ['old-1', 'old-2', 'old-3'] })
   check('jump to child of newly-archived parent', opened.includes('new-2'), `opened=${JSON.stringify(opened)}`)
@@ -56,18 +60,16 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
     { ids: [], byId: {}, current: void 0 },
   )
   const dispose = plugin.apply(ctx)
-  // 归档 old-a，但新会话还没在 sessions.list
   workspaces._set({ archivedSessionIds: ['old-a'] })
   check('not open yet (child missing)', opened.length === 0)
-  // 会话列表更新，新会话出现（parentId = old-a）
   sessions._set({ ids: ['old-a', 'new-a'], byId: { 'old-a': { id: 'old-a' }, 'new-a': { id: 'new-a', parentId: 'old-a' } } })
   check('pending sweep opens child', opened.includes('new-a'), `opened=${JSON.stringify(opened)}`)
   dispose()
 }
 
-// 用例 3：不相关归档不跳转（新会话 parentId 不匹配）
+// 用例 3：不相关归档不跳转
 {
-  const { ctx, opened, workspaces, sessions } = makeCtx(
+  const { ctx, opened, workspaces } = makeCtx(
     { archivedSessionIds: [] },
     { ids: ['a', 'b'], byId: { a: { id: 'a' }, b: { id: 'b', parentId: 'x' } } },
   )
@@ -77,14 +79,14 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
   dispose()
 }
 
-// 用例 4：open 抛错不崩溃（summary 在列表但 open 失败）
+// 用例 4：open 抛错不崩溃
 {
-  const { ctx, opened, workspaces, sessions } = makeCtx(
+  const { ctx, workspaces, sessions } = makeCtx(
     { archivedSessionIds: [] },
     { ids: [], byId: {} },
   )
   let openThrew = false
-  ctx.sessions.open = (id) => { openThrew = true; throw new Error('boom') }
+  ctx.sessions.open = () => { openThrew = true; throw new Error('boom') }
   const dispose = plugin.apply(ctx)
   workspaces._set({ archivedSessionIds: ['old-z'] })
   sessions._set({ ids: ['new-z'], byId: { 'new-z': { id: 'new-z', parentId: 'old-z' } } })
