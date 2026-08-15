@@ -16,11 +16,13 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话 → 归档老
 
 在对话输入框输入 `/fresh`：
 
-1. **总结**：`ctx.compaction.compactNow` 复用 dsh 的手动压缩通道，把早期历史替换为
-   一条摘要节点。
-2. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，挂载同一
-   preset。
-3. **归档**：`ctx.workspaces.archiveSession` 把老会话移入归档集，释放其事件树内存。
+1. **总结**：直接提取 dsh 上传给 LLM 的**完整上下文**（`session.requestHeader()` 的
+   system/tools + `session.deriveMessages()` 的全部消息），用一条简单指令让 LLM 总结成
+   自然语言摘要。区别于 dsh 的 `/compact`（用工程 checkpoint 指令 + token 比较，普通
+   对话上常失败）。
+2. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，并把摘要作为
+   新对话的开场消息（seed）。
+3. **归档**：`ctx.workspaceRegistry.archiveSession` 把老会话移入归档集，释放其事件树内存。
 
 每步独立、失败降级不阻断后续（例如 compaction 因 busy 失败时仍会开新对话 + 归档），
 完整结果在命令返回文本里。
