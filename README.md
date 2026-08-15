@@ -1,6 +1,6 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)]()
 [![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
