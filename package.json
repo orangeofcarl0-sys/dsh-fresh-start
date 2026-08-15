@@ -1,6 +1,6 @@
 {
   "name": "dsh-fresh-start",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "DSH /fresh 命令：一键总结当前对话 → 开启新对话 → 归档老对话（缓解超大会话内存/卡顿，DeepSeek Harness / DSH）",
   "type": "module",
   "main": "lib/index.js",

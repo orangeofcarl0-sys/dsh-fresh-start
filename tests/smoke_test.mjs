@@ -24,7 +24,7 @@ function makeCtx({
   summaryText = 'SUMMARY CONTENT', summaryFail = false, hasMessages = true,
   hasWorkspaces = true, createError = null,
 } = {}) {
-  const recorded = { registered: [], created: [], archived: [], llmOptions: [] }
+  const recorded = { registered: [], created: [], archived: [], llmOptions: [], resolveByPath: [], attached: [] }
   const ctx = {
     agentPresets: {
       serviceFor: () => void 0,
@@ -41,7 +41,13 @@ function makeCtx({
     commands: {
       register: (def) => { recorded.registered.push(def); return () => {} },
     },
-    workspaceRegistry: hasWorkspaces ? { archiveSession: async (id) => { recorded.archived.push(id) } } : void 0,
+    workspaceRegistry: hasWorkspaces ? {
+      archiveSession: async (id) => { recorded.archived.push(id) },
+      resolveByPath: async (path) => {
+        recorded.resolveByPath.push(path)
+        return { attachSession: async (id) => { recorded.attached.push(id) } }
+      },
+    } : void 0,
     llm: {
       // 真实 ctx.llm.stream 返回 AsyncIterable（非 Promise）
       stream: (options) => {
@@ -92,6 +98,7 @@ function makeInvocation() {
   check('new session cwd+preset', recorded.created[0].meta.cwd === 'C:\\proj' && recorded.created[0].meta.agentPreset === 'code')
   check('new session marked parentSession', recorded.created[0].meta.parentSession === 'session-old')
   check('old session archived', recorded.archived.includes('session-old'))
+  check('new session attached to workspace', recorded.attached.includes(recorded.created[0].sessionId), `attached=${JSON.stringify(recorded.attached)}`)
   check('result carries new sessionId', typeof result.sessionId === 'string')
 }
 
