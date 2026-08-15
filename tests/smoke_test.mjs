@@ -21,10 +21,6 @@ function makeCtx({
     },
   } : void 0
   const ctx = {
-    get: (name) => {
-      if (name === 'workspaces') return hasWorkspaces ? { archiveSession: async (id) => { recorded.archived.push(id) } } : void 0
-      return void 0
-    },
     agentPresets: {
       serviceFor: (agent, name) => (name === 'compaction' ? engine : void 0),
       resolve: async (id) => ({ id: id ?? 'default' }),
@@ -40,6 +36,7 @@ function makeCtx({
     commands: {
       register: (def) => { recorded.registered.push(def); return () => {} },
     },
+    workspaceRegistry: hasWorkspaces ? { archiveSession: async (id) => { recorded.archived.push(id) } } : void 0,
     effect: (gen) => { const it = gen(); const step = (r) => { const { value, done } = it.next(r); if (!done) step(typeof value === 'function' ? void 0 : value) }; step() },
     logger: { warn: () => {} },
   }
