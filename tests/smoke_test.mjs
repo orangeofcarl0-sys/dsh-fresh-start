@@ -59,7 +59,6 @@ function makeCtx({
       },
     },
     effect: (gen) => { const it = gen(); const step = (r) => { const { value, done } = it.next(r); if (!done) step(typeof value === 'function' ? void 0 : value) }; step() },
-    logger: { warn: () => {} },
   }
   return { ctx, recorded }
 }
@@ -146,6 +145,70 @@ function makeInvocation() {
   const result = await def.handler(makeInvocation())
   check('no workspaceRegistry: success', result.kind === 'success')
   check('no workspaceRegistry: archive skipped reported', result.text.includes('archive skipped'))
+}
+
+// 用例 6：不就地污染 deriveMessages() 的返回数组（可能为内部复用数组）
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  const shared = [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }]
+  inv.agent.session.deriveMessages = () => shared
+  await def.handler(inv)
+  check('deriveMessages result not mutated', shared.length === 1, `length=${shared.length}`)
+}
+
+// 用例 7：header.config 存在但缺 model → 回退到 agent 选项的 provider/model
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.agent.session.requestHeader = () => ({ config: { provider: 'from-config', model: '' } })
+  await def.handler(inv)
+  check('incomplete config falls back to agent options',
+    recorded.llmOptions[0]?.provider === 'p' && recorded.llmOptions[0]?.model === 'm',
+    `got ${recorded.llmOptions[0]?.provider}/${recorded.llmOptions[0]?.model}`)
+}
+
+// 用例 8：config 与 agent 选项都无完整 provider/model → 总结降级但新会话+归档照常
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.agent.session.requestHeader = () => ({})
+  inv.agent.options = {}
+  const result = await def.handler(inv)
+  check('no provider/model: summarization failed reported', result.text.includes('summarization failed'))
+  check('no provider/model: still creates and archives',
+    recorded.created.length === 1 && recorded.archived.includes('session-old'))
+}
+
+// 用例 9：signal 已取消 → 总结后中止，不创建不归档
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.signal.aborted = true
+  const result = await def.handler(inv)
+  check('aborted: cancelled error', result.kind === 'error' && result.text === 'fresh-start cancelled')
+  check('aborted: no create no archive', recorded.created.length === 0 && recorded.archived.length === 0)
+}
+
+// 用例 10：session.header 异常 → 结构化错误返回（不产生裸 rejection）
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.agent.session.header = void 0
+  const result = await def.handler(inv)
+  check('malformed header: structured error',
+    result?.kind === 'error' && result.text.includes('cannot read session header'), `kind=${result?.kind}`)
+  check('malformed header: nothing done', recorded.created.length === 0 && recorded.archived.length === 0)
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)

@@ -1,6 +1,6 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)]()
+[![Version](https://img.shields.io/badge/version-1.2.5-blue)]()
 [![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -47,10 +47,16 @@ client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/d
 
 ## 验证
 
-- `tests/smoke_test.mjs`（18 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
-  无 workspaces 降级 / `parentSession` 标记 —— ALL PASS
-- `tests/client_test.mjs`（6 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
-  不相关归档不跳 / open 异常吞掉 —— ALL PASS
+```sh
+npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm / dsh-agent-presets，来自 npm）
+npm test
+```
+
+- `tests/smoke_test.mjs`（31 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
+  无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
+  provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
+- `tests/client_test.mjs`（9 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
+  不相关归档不跳 / open 异常吞掉且不无限重试 —— ALL PASS
 
 ## 局限
 

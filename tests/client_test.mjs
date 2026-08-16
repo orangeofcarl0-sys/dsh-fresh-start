@@ -94,5 +94,21 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
   dispose()
 }
 
+// 用例 5：open 抛错后不再无限重试（后续会话列表更新不再触发 open）
+{
+  const { ctx, workspaces, sessions } = makeCtx(
+    { archivedSessionIds: [] },
+    { ids: [], byId: {} },
+  )
+  let openCalls = 0
+  ctx.sessions.open = () => { openCalls++; throw new Error('boom') }
+  const dispose = plugin.apply(ctx)
+  workspaces._set({ archivedSessionIds: ['old-q'] })
+  sessions._set({ ids: ['new-q'], byId: { 'new-q': { id: 'new-q', parentId: 'old-q' } } })
+  sessions._set({ ids: ['new-q', 'extra'], byId: { 'new-q': { id: 'new-q', parentId: 'old-q' }, extra: { id: 'extra' } } })
+  check('open failure not retried endlessly', openCalls === 1, `openCalls=${openCalls}`)
+  dispose()
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)
 process.exit(failures === 0 ? 0 : 1)
