@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.6 - 2026-08-18
+
+兼容性验证轮：确认 dsh 0.1.0-rc.7 无破坏性变更，依赖声明与文档对齐 rc.7。
+
+### 兼容性检查（rc.6 → rc.7 逐包比对 npm 发布产物）
+
+- `dsh-llm`：仅新增 `assembled()`（返回 `{blocks, replay}`，统一 max-token 截断
+  决策），`BlockAssembler.push/finish/blocks()` 与 `createUserMessage` 不变；
+- `dsh-agent-presets` / `dsh-agent` / `dsh-session` / `dsh-scope` / `dsh-base` /
+  `dsh-app-boot` / `dsh-workspace` / `dsh-command-compact`：代码零变化
+  （仅版本号与依赖升级）；
+- `dsh-client-runtime`：仅删除一个 settings 错误码 schema，client 插件接口
+  （`__ModuleLoader__` / `archivedSessionIds` / `parentId` / `sessions.open`）不变；
+- `dsh-cordis-client-runner`：唯一变更为 `slots` 注入的 keyed 化重构
+  （`settings.plugin.item`），与本插件使用的 `sessions` / `workspaces` 注入无关；
+- harness 主包（`@deepseek-ai/dsh`）lib 产物与 rc.6 逐字节一致。
+
+### 变更
+
+- **依赖声明**：`peerDependencies` / `devDependencies` 中 dsh 包范围更新为
+  `^0.1.0-rc.7`；测试套件在 rc.7 依赖下全部通过（40 断言）。
+- **文档**：README 的 dsh badge 与「局限」更新为 rc.7 并记录比对结论；
+  行为描述与源码注释对齐「总结请求不传 tools」。
+
 ## 1.2.5 - 2026-08-16
 
 代码审查修复轮：补全依赖声明与测试基建，收紧 host/client 两侧的健壮性。

@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.2.5-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.6-green)]()
+[![Version](https://img.shields.io/badge/version-1.2.6-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.7-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话。
@@ -17,7 +17,7 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
 在对话输入框输入 `/fresh`：
 
 1. **总结**：直接提取 dsh 上传给 LLM 的**完整上下文**（`session.requestHeader()` 的
-   system/tools + `session.deriveMessages()` 的全部消息），用一条简单指令让 LLM 总结成
+   system + `session.deriveMessages()` 的全部消息），用一条简单指令让 LLM 总结成
    自然语言摘要。区别于 dsh 的 `/compact`（用工程 checkpoint 指令 + token 比较，普通
    对话上常失败）。
 2. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，并把摘要作为
@@ -52,6 +52,8 @@ npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm / dsh-agent-preset
 npm test
 ```
 
+测试在 `@deepseek-ai/*` 依赖 `0.1.0-rc.7` 下运行。
+
 - `tests/smoke_test.mjs`（31 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
   provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
@@ -63,4 +65,9 @@ npm test
 - 总结依赖 `session.deriveMessages()`（dsh 上传的完整上下文），超大会话的上下文若超出
   模型窗口，总结可能失败（此时仍会开新对话 + 归档，只是新对话不带摘要）。
 - 本插件与 dsh 版本高度相关（依赖 `ctx.agents.create` / `ctx.workspaceRegistry` /
-  `ctx.sessions.open` 等内部 API），dsh 升级可能导致兼容性问题，请以 `0.1.0-rc.6` 为准。
+  `ctx.sessions.open` 等内部 API），dsh 升级可能导致兼容性问题，请以 `0.1.0-rc.7` 为准。
+  已对 rc.6 → rc.7 做过逐包发布产物比对：dsh-llm 仅新增 `assembled()`（含 replay
+  元数据，`blocks()` 语义不变）、dsh-cordis-client-runner 仅重构 slots 注入
+  （与本插件无关），agent-presets / agent / session / scope / base / app-boot /
+  workspace / command-compact / client-runtime 均无破坏性变更，harness 主包产物
+  逐字节一致；测试套件在 rc.7 依赖下全部通过。
