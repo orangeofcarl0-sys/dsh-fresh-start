@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.2.6-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.7-green)]()
+[![Version](https://img.shields.io/badge/version-1.2.7-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.0--rc.8-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话。
@@ -52,7 +52,7 @@ npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm / dsh-agent-preset
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.0-rc.7` 下运行。
+测试在 `@deepseek-ai/*` 依赖 `0.1.0-rc.8` 下运行。
 
 - `tests/smoke_test.mjs`（31 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
@@ -65,9 +65,10 @@ npm test
 - 总结依赖 `session.deriveMessages()`（dsh 上传的完整上下文），超大会话的上下文若超出
   模型窗口，总结可能失败（此时仍会开新对话 + 归档，只是新对话不带摘要）。
 - 本插件与 dsh 版本高度相关（依赖 `ctx.agents.create` / `ctx.workspaceRegistry` /
-  `ctx.sessions.open` 等内部 API），dsh 升级可能导致兼容性问题，请以 `0.1.0-rc.7` 为准。
-  已对 rc.6 → rc.7 做过逐包发布产物比对：dsh-llm 仅新增 `assembled()`（含 replay
-  元数据，`blocks()` 语义不变）、dsh-cordis-client-runner 仅重构 slots 注入
-  （与本插件无关），agent-presets / agent / session / scope / base / app-boot /
-  workspace / command-compact / client-runtime 均无破坏性变更，harness 主包产物
-  逐字节一致；测试套件在 rc.7 依赖下全部通过。
+  `ctx.sessions.open` 等内部 API），dsh 升级可能导致兼容性问题，请以 `0.1.0-rc.8` 为准。
+  已对 rc.7 → rc.8 做过逐包发布产物比对：dsh-llm 新增 `interruptedBlocks()`（取消
+  收尾）与图片卸载常量、dsh-session 新增 `turn/end` 的 `interrupted` 标记与 4 个
+  team 事件类型、dsh-client-runtime 的 `prompt` 新增可选 signal 参数——均为增量，
+  不影响本插件使用的 API；agent-presets / agent / scope / base / workspace /
+  command-compact 代码零变化，harness 主包仅新增一个 pwsh 工具依赖与 preset 文案
+  调整；测试套件在 rc.8 依赖下全部通过。

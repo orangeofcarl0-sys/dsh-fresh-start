@@ -1,6 +1,6 @@
 {
   "name": "dsh-fresh-start",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "DSH /fresh 命令：一键总结当前对话 → 开启新对话 → 归档老对话（缓解超大会话内存/卡顿，DeepSeek Harness / DSH）",
   "type": "module",
   "main": "lib/index.js",
@@ -39,13 +39,13 @@
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-agent-presets": "^0.1.0-rc.7",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.7",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.7"
+    "@deepseek-ai/dsh-agent-presets": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.8"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-agent-presets": "^0.1.0-rc.7",
-    "@deepseek-ai/dsh-llm": "^0.1.0-rc.7"
+    "@deepseek-ai/dsh-agent-presets": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.8"
   },
   "dsh": {
     "bundle": {

@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.7 - 2026-08-20
+
+兼容性验证轮：确认 dsh 0.1.0-rc.8 无破坏性变更，依赖声明与文档对齐 rc.8。
+
+### 兼容性检查（rc.7 → rc.8 逐包比对 npm 发布产物）
+
+- `dsh-llm`：新增 `interruptedBlocks()`（取消时收尾未完成文本/reasoning 块）、
+  图片超限卸载常量 `OFFLOADED_IMAGE_TEXT`、重试默认值 2→5；
+  `BlockAssembler.push/finish/blocks()` 与 `createUserMessage` 不变；
+- `dsh-session`：仅新增 `turn/end` 可选 `interrupted` 标记与 4 个 team 事件类型，
+  `requestHeader()` / `deriveMessages()` 不变；
+- `dsh-client-runtime`：`prompt` 新增可选 `signal` 参数与路径缩写辅助函数，
+  client 插件接口（`__ModuleLoader__` / `archivedSessionIds` / `parentId` /
+  `sessions.open`）不变；
+- `dsh-app-boot`：仅新增一个平台常量；`dsh-cordis-client-runner`：仅 slots 契约
+  文案与新增 `conversation.hero.brand.mark` 槽位，与本插件使用的
+  `sessions` / `workspaces` 注入无关；
+- `dsh-agent-presets` / `dsh-agent` / `dsh-scope` / `dsh-base` / `dsh-workspace` /
+  `dsh-command-compact`：代码零变化（仅版本号与依赖升级）；
+- harness 主包：依赖无移除（新增 `dsh-tool-pwsh-persistent`），preset 配置仅
+  注释文案调整，preset id 不变。
+
+### 变更
+
+- **依赖声明**：`peerDependencies` / `devDependencies` 中 dsh 包范围更新为
+  `^0.1.0-rc.8`；测试套件在 rc.8 依赖下全部通过（40 断言）。
+- **文档**：README 的 dsh badge 与「局限」更新为 rc.8 并记录比对结论；源码注释
+  版本引用同步。
+
 ## 1.2.6 - 2026-08-18
 
 兼容性验证轮：确认 dsh 0.1.0-rc.7 无破坏性变更，依赖声明与文档对齐 rc.7。
