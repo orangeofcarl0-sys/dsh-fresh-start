@@ -28,7 +28,10 @@ function makeCtx({
   const ctx = {
     agentPresets: {
       serviceFor: () => void 0,
-      resolve: async (id) => ({ id: id ?? 'default' }),
+      resolve: async (id) => {
+        if (id === 'no-such-preset') throw new Error(`unknown preset "${id}"`)
+        return { id: id ?? 'default' }
+      },
       mount: async () => {},
     },
     agents: {
@@ -92,9 +95,11 @@ function makeInvocation() {
   check('full flow success', result.kind === 'success', `kind=${result.kind}`)
   check('llm.stream called', recorded.llmOptions.length === 1)
   check('llm messages include instruction', recorded.llmOptions[0].messages.at(-1).content[0].text.includes('Summarize'))
-  check('new session seeded with summary', recorded.created.length === 1 && recorded.created[0].seed?.[3]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
-  check('seed has full turn (non-blank)', recorded.created[0].seed?.[0]?.type === 'turn/start' && recorded.created[0].seed?.[5]?.type === 'turn/end')
-  check('seed assistant message has surfaceOp append', recorded.created[0].seed?.[3]?.surfaceOp === 'append')
+  check('new session seeded with summary', recorded.created.length === 1 && recorded.created[0].seed?.[6]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
+  check('seed has full turn (non-blank)', recorded.created[0].seed?.[3]?.type === 'turn/start' && recorded.created[0].seed?.[8]?.type === 'turn/end')
+  check('seed assistant message has surfaceOp append', recorded.created[0].seed?.[6]?.surfaceOp === 'append')
+  check('seed prefixed with permission knobs', recorded.created[0].seed?.[0]?.type === 'permission/preset' && recorded.created[0].seed?.[1]?.type === 'sandbox/mode' && recorded.created[0].seed?.[2]?.type === 'approval/policy')
+  check('seed knobs carry concrete values', recorded.created[0].seed?.[0]?.data?.preset === 'workspace-write' && recorded.created[0].seed?.[1]?.data?.mode === 'workspace-write' && recorded.created[0].seed?.[2]?.data?.policy === 'ask')
   check('new session cwd+preset', recorded.created[0].meta.cwd === 'C:\\proj' && recorded.created[0].meta.agentPreset === 'code')
   check('new session marked parentSession', recorded.created[0].meta.parentSession === 'session-old')
   check('old session archived', recorded.archived.includes('session-old'))
@@ -209,6 +214,32 @@ function makeInvocation() {
   check('malformed header: structured error',
     result?.kind === 'error' && result.text.includes('cannot read session header'), `kind=${result?.kind}`)
   check('malformed header: nothing done', recorded.created.length === 0 && recorded.archived.length === 0)
+}
+
+// 用例 11：/fresh <preset> 指定 preset 覆盖继承值
+{
+  const { ctx, recorded } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.rawInput = 'standard'
+  const result = await def.handler(inv)
+  check('preset arg: success', result.kind === 'success', `kind=${result.kind}`)
+  check('preset arg: new session on requested preset', recorded.created[0]?.meta?.agentPreset === 'standard',
+    `agentPreset=${JSON.stringify(recorded.created[0]?.meta?.agentPreset)}`)
+}
+
+// 用例 12：/fresh <unknown> → 明确报错，不创建不归档
+{
+  const { ctx, recorded } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.rawInput = 'no-such-preset'
+  const result = await def.handler(inv)
+  check('unknown preset: error reported', result?.kind === 'error' && result.text.includes('cannot use preset "no-such-preset"'),
+    `kind=${result?.kind} text=${result?.text?.slice(0, 80)}`)
+  check('unknown preset: nothing created/archived', recorded.created.length === 0 && recorded.archived.length === 0)
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)

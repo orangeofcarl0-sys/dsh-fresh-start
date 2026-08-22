@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.8 - 2026-08-22
+
+修复轮：极简模式（minimal preset）下 `/fresh` 无法创建新会话；新增 `/fresh <preset>` 参数。
+
+### 修复：seeded 会话创建崩溃（非沙箱 shell）
+
+- **症状**：`/fresh` 报 `new session FAILED (session event "sandbox/mode" carries non-JSON-serializable data)`，新会话建不出来。
+- **根因**：seed 会话走 `dsh-permission-presets` 的 `pinInitialPermission()` seeded 分支，因 seed 里没有
+  `sandbox/mode` 事件，回填 `ctx.shell.sandboxMode`；在非沙箱 shell（如本地 unconfined-bash hack 下的
+  `dsh-bash-local`）上该值为 `undefined`，`setSandboxMode(session, undefined)` 追加的事件无法通过
+  `session.append` 的 JSON 序列化校验而抛错。
+- **修复**：seed 事件序列前置三个 permission knob 事件（`permission/preset` + `sandbox/mode` +
+  `approval/policy`，取值 `workspace-write`/`workspace-write`/`ask`，与 dsh 原生会话头部一致），
+  seeded 分支读到有效 sandbox 值后跳过回填。
+
+### 新功能：`/fresh <preset>`
+
+- `/fresh` 后跟 preset id 时，新会话使用指定 preset（覆盖继承值），例如极简模式下
+  `/fresh standard` 直接开 standard 新会话并带上摘要。
+- 指定不存在的 preset 时命令明确报错（不会静默回退到继承值）。
+- 不带参数行为不变（继承当前会话的 preset）。
+
+### 变更
+
+- `lib/index.js`：seed knob 预置 + preset 参数解析；命令描述更新。
+- `tests/smoke_test.mjs`：seed 结构断言更新，新增 knob 预置、`/fresh <preset>`、未知 preset 用例。
+- `README.md`：补充 `/fresh <preset>` 用法。
+
 ## 1.2.7 - 2026-08-20
 
 兼容性验证轮：确认 dsh 0.1.0-rc.8 无破坏性变更，依赖声明与文档对齐 rc.8。

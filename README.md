@@ -14,7 +14,7 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
 
 ## 行为
 
-在对话输入框输入 `/fresh`：
+在对话输入框输入 `/fresh`（可带可选参数 `/fresh <preset>`）：
 
 1. **总结**：直接提取 dsh 上传给 LLM 的**完整上下文**（`session.requestHeader()` 的
    system + `session.deriveMessages()` 的全部消息），用一条简单指令让 LLM 总结成
@@ -22,6 +22,9 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
    对话上常失败）。
 2. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，并把摘要作为
    新对话的开场消息（seed）。新会话的 `header.parentSession` 指向老会话。
+   可选参数 `/fresh <preset>` 用指定 preset 覆盖继承值（例如在极简模式下
+   `/fresh standard` 直接开一个 standard 新会话并带上摘要）；preset 不存在或
+   不可用时命令直接报错，不会静默回退。
 3. **归档 + 自动跳转**：`ctx.workspaceRegistry.archiveSession` 归档老会话；配套的
    **client 插件**（`lib/client.js`）监听归档事件，找到 `parentId === 归档会话` 的新会话
    并 `ctx.sessions.open` 自动跳转过去。
