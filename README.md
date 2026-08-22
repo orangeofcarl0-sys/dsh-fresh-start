@@ -16,11 +16,16 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
 
 在对话输入框输入 `/fresh`（可带可选参数 `/fresh <preset>`）：
 
-1. **总结**：直接提取 dsh 上传给 LLM 的**完整上下文**（`session.requestHeader()` 的
-   system + `session.deriveMessages()` 的全部消息），用一条简单指令让 LLM 总结成
-   自然语言摘要。区别于 dsh 的 `/compact`（用工程 checkpoint 指令 + token 比较，普通
-   对话上常失败）。
-2. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，并把摘要作为
+1. **压缩（Compact-First）**：若当前 preset 挂载了宿主压缩引擎（standard/code/cordis），
+   先 `compactNow` 强制压缩会话——`deriveMessages()` 跟随 surface shadow 收紧，
+   后续总结请求体显著缩小并复用压缩摘要。引擎不可用（minimal）、agent busy、
+   无可压缩范围或失败时安静降级，不阻断流程（spec：`docs/COMPACT_FIRST_SPEC.md`）。
+2. **总结**：直接提取 dsh 上传给 LLM 的**当前上下文**（`session.requestHeader()` 的
+   system + `session.deriveMessages()` 的全部消息，已压缩时为收紧后的上下文），
+   用一条简单指令让 LLM 总结成自然语言摘要。区别于 dsh 的 `/compact`（用工程
+   checkpoint 指令 + token 比较，普通对话上常失败）；本实现把 compact 作为前置
+   收紧、对话总结作为最终 seed 生成器。
+3. **开新对话**：`ctx.agents.create` 继承老会话的 `cwd` 与 agent preset，并把摘要作为
    新对话的开场消息（seed）。新会话的 `header.parentSession` 指向老会话。
    可选参数 `/fresh <preset>` 用指定 preset 覆盖继承值（例如在极简模式下
    `/fresh standard` 直接开一个 standard 新会话并带上摘要）；preset 不存在或
@@ -32,7 +37,7 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
    | `/fresh ptc` | `code` | PTC 模式（Code Mode SDK） |
    | `/fresh minimal` | `minimal` | 极简模式 |
    | `/fresh create` / `/fresh creator` | `cordis` | 创造模式 |
-3. **归档 + 自动跳转**：`ctx.workspaceRegistry.archiveSession` 归档老会话；配套的
+4. **归档 + 自动跳转**：`ctx.workspaceRegistry.archiveSession` 归档老会话；配套的
    **client 插件**（`lib/client.js`）监听归档事件，找到 `parentId === 归档会话` 的新会话
    并 `ctx.sessions.open` 自动跳转过去。
 

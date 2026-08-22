@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.9 - 2026-08-22
+
+Compact-First 总结策略（spec：`docs/COMPACT_FIRST_SPEC.md`，CFS-001/002/003）。
+
+### 变更
+
+- **Compact-First**：`/fresh` 总结前先尝试宿主压缩引擎（`serviceFor(agent,'compaction')` +
+  `compactNow`）强制压缩当前会话；压缩成功后 `deriveMessages()` 收紧（surface
+  replaceGeneration 递增），对话式总结请求体显著缩小，并复用压缩摘要。
+- **安静降级**：无引擎（minimal preset）、agent busy、无可压缩范围或引擎抛错时，
+  回退为 v1.2.8 纯对话式总结；所有失败捕获不冒泡。
+- **可诊断**：返回文本与日志含 compaction 段（`compacted (shadowed N surface nodes)` /
+  `compaction skipped (<原因>)`）。
+- `compactNow` 使用 `invocation.commandId` 作为 `sourceCommandId`（审计归属）。
+- `tests/smoke_test.mjs`：新增 F-02..F-05（压缩成功/无范围/失败降级/先压后总结）。
+- `README.md`：总结流程说明更新。
+
 ## 1.2.8 - 2026-08-22
 
 修复轮：极简模式（minimal preset）下 `/fresh` 无法创建新会话；新增 `/fresh <preset>` 参数。

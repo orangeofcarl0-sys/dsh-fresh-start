@@ -22,12 +22,12 @@ function makeStream(text, { fail = false } = {}) {
 
 function makeCtx({
   summaryText = 'SUMMARY CONTENT', summaryFail = false, hasMessages = true,
-  hasWorkspaces = true, createError = null,
+  hasWorkspaces = true, createError = null, compactEngine = null,
 } = {}) {
   const recorded = { registered: [], created: [], archived: [], llmOptions: [], resolveByPath: [], attached: [] }
   const ctx = {
     agentPresets: {
-      serviceFor: () => void 0,
+      serviceFor: () => compactEngine,
       resolve: async (id) => {
         if (id === 'no-such-preset') throw new Error(`unknown preset "${id}"`)
         return { id: id ?? 'default' }
@@ -263,6 +263,73 @@ function makeInvocation() {
   check('alias create: success', rB.kind === 'success', `kind=${rB.kind}`)
   check('alias create: new session on cordis preset', recB.created[0]?.meta?.agentPreset === 'cordis',
     `agentPreset=${JSON.stringify(recB.created[0]?.meta?.agentPreset)}`)
+}
+
+// 用例 14-17：Compact-First（CFS-001/CFS-003）
+// F-02：引擎可用、压缩成功 → parts 含 compacted、create 仍调用、摘要用收紧后上下文
+{
+  const engine = {
+    compactNow: async (agent, signal, commandId) => ({
+      shadowedSeqs: [1, 2, 3],
+      shadowedRange: { start: 1, end: 3 },
+      shadowedTokenCount: 500,
+      summarySeq: 4,
+    }),
+  }
+  const { ctx, recorded } = makeCtx({ compactEngine: engine })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.rawInput = ''
+  const result = await def.handler(inv)
+  check('F-02 compact ok: success', result.kind === 'success', `kind=${result.kind}`)
+  check('F-02 compact ok: note in result', result.text.includes('compacted (shadowed 3 surface nodes)'),
+    `text=${result.text?.slice(0, 120)}`)
+  check('F-02 compact ok: new session still created', recorded.created.length === 1)
+  check('F-02 compact ok: seed still carries summary', recorded.created[0]?.seed?.[6]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
+}
+
+// F-03：引擎存在但无可用范围（compactNow 返回 null）
+{
+  const engine = { compactNow: async () => null }
+  const { ctx, recorded } = makeCtx({ compactEngine: engine })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const result = await def.handler(makeInvocation())
+  check('F-03 no range: success', result.kind === 'success')
+  check('F-03 no range: note reported', result.text.includes('compaction skipped (no compactable range)'))
+  check('F-03 no range: create still called', recorded.created.length === 1)
+}
+
+// F-04：引擎抛错（如 busy）→ 安静降级，不冒泡
+{
+  const engine = { compactNow: async () => { throw new Error('manual compaction requires an idle agent') } }
+  const { ctx, recorded } = makeCtx({ compactEngine: engine })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const result = await def.handler(makeInvocation())
+  check('F-04 engine error: success (no throw)', result.kind === 'success', `kind=${result.kind}`)
+  check('F-04 engine error: note reported', result.text.includes('compaction skipped (manual compaction requires an idle agent)'),
+    `text=${result.text?.slice(0, 140)}`)
+  check('F-04 engine error: create still called', recorded.created.length === 1)
+}
+
+// F-05：压缩成功后总结请求基于收紧后的上下文（deriveMessages 重读）
+{
+  let sawCompact = false
+  const engine = {
+    compactNow: async () => {
+      sawCompact = true
+      return { shadowedSeqs: [0], shadowedRange: { start: 0, end: 0 }, summarySeq: 1 }
+    },
+  }
+  const { ctx, recorded } = makeCtx({ compactEngine: engine })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  await def.handler(makeInvocation())
+  check('F-05 compact ran before summarize', sawCompact === true)
+  check('F-05 summarize still sent one llm request', recorded.llmOptions.length === 1)
+  check('F-05 summarize messages present', Array.isArray(recorded.llmOptions[0]?.messages) && recorded.llmOptions[0].messages.length > 0)
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)
