@@ -24,7 +24,14 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
    新对话的开场消息（seed）。新会话的 `header.parentSession` 指向老会话。
    可选参数 `/fresh <preset>` 用指定 preset 覆盖继承值（例如在极简模式下
    `/fresh standard` 直接开一个 standard 新会话并带上摘要）；preset 不存在或
-   不可用时命令直接报错，不会静默回退。
+   不可用时命令直接报错，不会静默回退。四大内置模式都可用，且支持友好别名：
+
+   | 输入 | 目标 preset | 模式 |
+   |---|---|---|
+   | `/fresh standard` | `standard` | 标准模式 |
+   | `/fresh ptc` | `code` | PTC 模式（Code Mode SDK） |
+   | `/fresh minimal` | `minimal` | 极简模式 |
+   | `/fresh create` / `/fresh creator` | `cordis` | 创造模式 |
 3. **归档 + 自动跳转**：`ctx.workspaceRegistry.archiveSession` 归档老会话；配套的
    **client 插件**（`lib/client.js`）监听归档事件，找到 `parentId === 归档会话` 的新会话
    并 `ctx.sessions.open` 自动跳转过去。

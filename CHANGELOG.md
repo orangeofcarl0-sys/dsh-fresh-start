@@ -20,13 +20,16 @@
 - `/fresh` 后跟 preset id 时，新会话使用指定 preset（覆盖继承值），例如极简模式下
   `/fresh standard` 直接开 standard 新会话并带上摘要。
 - 指定不存在的 preset 时命令明确报错（不会静默回退到继承值）。
+- 内置四大模式均可用，并支持友好别名：`ptc` → `code`（PTC 模式）、
+  `create`/`creator` → `cordis`（创造模式）；`standard`/`minimal` 直接用 id。
 - 不带参数行为不变（继承当前会话的 preset）。
 
 ### 变更
 
-- `lib/index.js`：seed knob 预置 + preset 参数解析；命令描述更新。
-- `tests/smoke_test.mjs`：seed 结构断言更新，新增 knob 预置、`/fresh <preset>`、未知 preset 用例。
-- `README.md`：补充 `/fresh <preset>` 用法。
+- `lib/index.js`：seed knob 预置 + preset 参数解析 + 别名映射（ptc/create/creator）；命令描述更新。
+- `tests/smoke_test.mjs`：seed 结构断言更新，新增 knob 预置、`/fresh <preset>`、未知 preset、
+  `ptc`/`create` 别名用例。
+- `README.md`：补充 `/fresh <preset>` 用法与四大模式别名表。
 
 ## 1.2.7 - 2026-08-20
 

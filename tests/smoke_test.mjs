@@ -242,5 +242,28 @@ function makeInvocation() {
   check('unknown preset: nothing created/archived', recorded.created.length === 0 && recorded.archived.length === 0)
 }
 
+// 用例 13：/fresh ptc → code（PTC 模式别名），/fresh create → cordis（创造模式别名）
+{
+  const { ctx: ctxA, recorded: recA } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctxA)
+  const defA = recA.registered[0]
+  const invA = makeInvocation()
+  invA.rawInput = 'ptc'
+  const rA = await defA.handler(invA)
+  check('alias ptc: success', rA.kind === 'success', `kind=${rA.kind}`)
+  check('alias ptc: new session on code preset', recA.created[0]?.meta?.agentPreset === 'code',
+    `agentPreset=${JSON.stringify(recA.created[0]?.meta?.agentPreset)}`)
+
+  const { ctx: ctxB, recorded: recB } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctxB)
+  const defB = recB.registered[0]
+  const invB = makeInvocation()
+  invB.rawInput = 'create'
+  const rB = await defB.handler(invB)
+  check('alias create: success', rB.kind === 'success', `kind=${rB.kind}`)
+  check('alias create: new session on cordis preset', recB.created[0]?.meta?.agentPreset === 'cordis',
+    `agentPreset=${JSON.stringify(recB.created[0]?.meta?.agentPreset)}`)
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)
 process.exit(failures === 0 ? 0 : 1)
