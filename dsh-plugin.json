@@ -1,0 +1,14 @@
+{
+  "$schema": "urn:dsh-std:community-draft:dsh-plugin:0.15",
+  "manifestVersion": "0.15",
+  "id": "io.github.orangeofcarl0-sys.dsh-fresh-start",
+  "name": "dsh-fresh-start",
+  "version": "1.2.10",
+  "facets": { "host": { "entry": "lib/std/host.js", "apiVersion": "v1alpha1" } },
+  "requires": { "contracts": [] },
+  "permissions": [],
+  "contributes": { "commands": [] },
+  "subscriptions": [],
+  "license": "MIT",
+  "source": { "repository": "https://github.com/orangeofcarl0-sys/dsh-fresh-start.git" }
+}

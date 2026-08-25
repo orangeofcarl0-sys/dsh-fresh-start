@@ -2,6 +2,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.2.10-blue)]()
 [![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-green)]()
+[![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话。
@@ -63,7 +64,7 @@ client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/d
 ## 验证
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm / dsh-agent-presets，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/* rc.2、@dsh-std/manifest，来自 npm）
 npm test
 ```
 
@@ -74,6 +75,25 @@ npm test
   provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
 - `tests/client_test.mjs`（9 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
   不相关归档不跳 / open 异常吞掉且不无限重试 —— ALL PASS
+- `tests/std_manifest_test.mjs`：`dsh-plugin.json` 的 Community v0.15 结构断言
+  （可解析 / 版本同步 / 入口存在）—— ALL PASS
+
+## dsh-std 兼容性
+
+1.2.10 起本插件**双轨制**：
+
+- **功能路径唯一**：`/fresh` 全部能力仍由原生 cordis 入口（`lib/index.js` +
+  `cordis.patch.yml`）提供，这是唯一的功能实现路径。
+- **dsh-std 清单（惰性）**：附带 dsh-std Community v0.15 的 `dsh-plugin.json`
+  （std 运行时包 `@dsh-std/core` / `@dsh-std/manifest` `0.1.0-rc1`，2026-08-18），宿主
+  facet 入口为占位实现 `lib/std/host.js`（空 `activate()`）。std 侧尚无 session/workspace
+  生命周期协议可承载本插件能力，故 `contributes.commands` 刻意留空——避免在装有
+  `@dsh-std/adapter-dsh` 的环境里向原生注册表投影第二个 `/fresh` 造成冲突。
+- **默认完全惰性**：dsh 原生加载器不读取 `dsh-plugin.json`；只有显式安装
+  `@dsh-std/adapter-dsh` 后清单才会被发现与校验（占位入口可通过其装载管线，
+  空贡献 ⇒ 零投影）。
+- **结构断言**：`tests/std_manifest_test.mjs` 用 `@dsh-std/manifest` 的 `parseManifest`
+  校验清单可解析、版本与 package.json 同步、入口文件存在。
 
 ## 局限
 

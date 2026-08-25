@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.10 - 2026-08-25
+
+依赖对齐轮 + 双轨制：`@deepseek-ai/*` 升至 `0.1.1-rc.2`；新增惰性 dsh-std Community v0.15 清单。
+
+### 变更
+
+- **依赖对齐**：peerDependencies 与 devDependencies 统一升至 `^0.1.1-rc.2`
+  （rc.7 → rc.8、rc.1 → rc.2 发布产物逐包比对均为增量变更，本插件所用 API 无变化；
+  rc.2 中 `sessions.create` 收窄的参数本插件从未使用）。`@deepseek-ai/cordis` 进入
+  devDependencies（测试套件需本地可解析，peer 声明不参与安装）。
+- **双轨制**：新增 dsh-std Community v0.15 的 `dsh-plugin.json`（id
+  `io.github.orangeofcarl0-sys.dsh-fresh-start`）与占位宿主 facet 入口 `lib/std/host.js`；
+  `/fresh` 功能仍全部由原生 cordis 入口提供。未装 `@dsh-std/adapter-dsh` 时清单完全惰性；
+  `contributes.commands` 刻意留空，避免适配器环境下投影出第二个 `/fresh`。
+- `tests/std_manifest_test.mjs`：用 `@dsh-std/manifest@0.1.0-rc1` 的 `parseManifest`
+  断言清单结构与 package.json 版本同步；接入 `npm test`；devDep 钉死 `0.1.0-rc1`。
+- `README.md`：徽章新增 `dsh-std Community v0.15`（对齐 dsh-large-proj-perf）；新增
+  「dsh-std 兼容性」节。
+
 ## 1.2.9 - 2026-08-22
 
 Compact-First 总结策略（spec：`docs/COMPACT_FIRST_SPEC.md`，CFS-001/002/003）。
