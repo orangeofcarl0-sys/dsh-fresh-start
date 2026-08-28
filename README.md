@@ -58,6 +58,12 @@ DSH `/fresh` 命令：一键总结当前对话 → 开启新对话（自动跳�
 dsh plugin --profile web add github:orangeofcarl0-sys/dsh-fresh-start
 ```
 
+插件源为 GitHub 仓库（不走本地路径），之后 dsh 发新版只需同步仓库再更新：
+
+```sh
+dsh plugin --profile web update dsh-fresh-start
+```
+
 重启 `dsh web`，日志出现 `[fresh-start] installed: /fresh command registered` 即成功。
 client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/dsh-fresh-start/client.js` 返回 200）。
 
@@ -94,6 +100,8 @@ npm test
   空贡献 ⇒ 零投影）。
 - **结构断言**：`tests/std_manifest_test.mjs` 用 `@dsh-std/manifest` 的 `parseManifest`
   校验清单可解析、版本与 package.json 同步、入口文件存在。
+- **前向兼容**：清单在 `@dsh-std/manifest@0.1.1-rc.1` 的新版校验器下同样可解析
+  （2026-08-28 实测；`@dsh-std/*` 已全线发布 0.1.1-rc.1，含 `adapter-dsh`）。
 
 ## 局限
 
