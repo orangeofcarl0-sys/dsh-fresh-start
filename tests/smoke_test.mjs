@@ -242,7 +242,8 @@ function makeInvocation() {
   check('unknown preset: nothing created/archived', recorded.created.length === 0 && recorded.archived.length === 0)
 }
 
-// 用例 13：/fresh ptc → code（PTC 模式别名），/fresh create → cordis（创造模式别名）
+// 用例 13：/fresh ptc → ptc（alpha.5 内置 id），/fresh code → ptc（旧输入兼容），
+// /fresh create → cordis（创造模式别名）
 {
   const { ctx: ctxA, recorded: recA } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
   plugin.apply(ctxA)
@@ -251,8 +252,18 @@ function makeInvocation() {
   invA.rawInput = 'ptc'
   const rA = await defA.handler(invA)
   check('alias ptc: success', rA.kind === 'success', `kind=${rA.kind}`)
-  check('alias ptc: new session on code preset', recA.created[0]?.meta?.agentPreset === 'code',
+  check('alias ptc: new session on ptc preset', recA.created[0]?.meta?.agentPreset === 'ptc',
     `agentPreset=${JSON.stringify(recA.created[0]?.meta?.agentPreset)}`)
+
+  const { ctx: ctxC, recorded: recC } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctxC)
+  const defC = recC.registered[0]
+  const invC = makeInvocation()
+  invC.rawInput = 'code'
+  const rC = await defC.handler(invC)
+  check('alias code (legacy): success', rC.kind === 'success', `kind=${rC.kind}`)
+  check('alias code (legacy): new session on ptc preset', recC.created[0]?.meta?.agentPreset === 'ptc',
+    `agentPreset=${JSON.stringify(recC.created[0]?.meta?.agentPreset)}`)
 
   const { ctx: ctxB, recorded: recB } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
   plugin.apply(ctxB)

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.0 - 2026-09-03
+
+dsh `0.1.2-alpha.5` 适配轮（跨越式更新）。alpha.5 删除了本插件依赖的
+`@deepseek-ai/dsh-agent-presets#resolveSessionPreset`，升级后插件被宿主停用（断点见
+dsh 升级执行记录 2026-09-03）；本版为自行适配。
+
+### 变更
+
+- **preset 继承内联实现**：alpha.5 以 `agent-preset/selected` 事件记录挂载变更
+  （事件 `data.agentPreset`，投影初始态取 `header.agentPreset`），等价实现为倒序
+  扫描取最后一次选择、无事件回退 header，替代已删除的 `resolveSessionPreset`。
+- **preset 别名语义反转**：alpha.5 内置 preset 为 standard/minimal/ptc/cordis，
+  `code` 更名 `ptc` 且不留别名。`/fresh ptc` 现直接命中内置 id；`/fresh code`
+  作为旧输入兼容映射到 `ptc`；`create`/`creator` → `cordis` 不变。
+- **Compact-First 走全局压缩 seam**：alpha.5 起 `ctx.compaction` 是全局服务
+  （builtin `/compact` 同款，`compactNow(agent, signal, commandId)` 调用形状不变），
+  优先使用；`agentPresets.serviceFor(agent,'compaction')` 作为 rc.2 形态兜底保留。
+- **移除 dsh-client-runtime 依赖**：该包在 alpha 线已停止发布（宿主树中亦已移除），
+  从 peerDependencies 删除；`dsh.client` 声明移除指向它的 `inject`（client 半边
+  `lib/client.js` 本就零宿主 import，`window.__ModuleLoader__.load` 注册方式与
+  alpha.5 新 client-modules 机制一致）。
+- 其余宿主 API 逐一核对 alpha.5 均未变：`agents.create`（seed/meta/setup 形状）、
+  `workspaceRegistry.archiveSession/resolveByPath/attachSession`、
+  `commands.register`、`session.requestHeader/deriveMessages`、`BlockAssembler`、
+  `createUserMessage`、`agentPresets.resolve/mount`、permission seeded 分支。
+- peers/devDeps 升 `^0.1.2-alpha.5`；`dsh-plugin.json` 版本同步 1.3.0。
+
 ## 1.2.10 - 2026-08-25
 
 依赖对齐轮 + 双轨制：`@deepseek-ai/*` 升至 `0.1.1-rc.2`；新增惰性 dsh-std Community v0.15 清单。

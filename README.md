@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.2.10-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.1--rc.2-green)]()
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.2--alpha.5-green)]()
 [![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -47,9 +47,12 @@ client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/d
 | 输入 | 目标 preset | 模式 |
 |---|---|---|
 | `/fresh standard` | `standard` | 标准模式 |
-| `/fresh ptc` | `code` | PTC 模式（Code Mode SDK） |
+| `/fresh ptc`（或旧输入 `code`） | `ptc` | PTC 模式（Code Mode SDK） |
 | `/fresh minimal` | `minimal` | 极简模式 |
 | `/fresh create` / `/fresh creator` | `cordis` | 创造模式 |
+
+> dsh 0.1.2-alpha.5 把内置 `code` preset 更名为 `ptc` 且不留别名；本插件将 `ptc`
+> 直接作为 preset id 使用，`code` 仅作旧输入兼容映射到 `ptc`。
 
 指定不存在的 preset 时命令直接报错，不会静默回退到继承值。
 
@@ -115,12 +118,31 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.1-rc.2` 为准（本机与 npm 最新版本一致）。插件依赖 dsh 内部 API
+以 `0.1.2-alpha.5` 为准（2026-09-03 跨越式更新适配，1.3.0）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-已对相邻版本做过逐包发布产物比对（rc.7 → rc.8、rc.1 → rc.2）：均为增量变更，不影响本
-插件使用的 API（rc.2 中 `sessions.create` 收窄的参数本插件从未使用）。
+1.3.0 对 alpha.5 的适配点：
+
+- `@deepseek-ai/dsh-agent-presets#resolveSessionPreset` 已删除 → 内联等价实现
+  （`agent-preset/selected` 事件倒序扫描取 `data.agentPreset`，回退
+  `header.agentPreset`，与宿主投影语义一致）；
+- 内置 preset `code` 更名 `ptc` 且不留别名 → 别名表反转（`/fresh ptc` 直接命中
+  内置 id，`/fresh code` 作旧输入兼容映射到 `ptc`）；
+- compaction 变为全局服务 → Compact-First 优先 `ctx.compaction`（`/compact` 同款
+  seam），rc.2 的 per-preset `serviceFor` 形态兜底；
+- `@deepseek-ai/dsh-client-runtime` 在 alpha 线停止发布 → 移除 peer 依赖与
+  `dsh.client.inject` 引用（client 半边零宿主 import，注册方式与 alpha.5
+  client-modules 机制一致，不受影响）。
+
+其余用到的宿主 API（`agents.create` 的 seed/meta/setup 形状、
+`workspaceRegistry.archiveSession / resolveByPath / attachSession`、
+`commands.register`、`session.requestHeader / deriveMessages`、`BlockAssembler` /
+`createUserMessage`、`agentPresets.resolve / mount`、permission seeded 分支）逐一
+核对 alpha.5 均未变。
+
+历史：rc.7 → rc.8、rc.1 → rc.2 时代的逐包发布产物比对均为增量变更（rc.2 中
+`sessions.create` 收窄的参数本插件从未使用）。
 
 ### dsh-std（双轨制）
 
@@ -145,9 +167,9 @@ npm install   # 安装 devDependencies（@deepseek-ai/* rc.2、@dsh-std/manifest
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.1-rc.2` 下运行：
+测试在 `@deepseek-ai/*` 依赖 `0.1.2-alpha.5` 下运行：
 
-- `tests/smoke_test.mjs`（31 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
+- `tests/smoke_test.mjs`（33 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
   provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
 - `tests/client_test.mjs`（9 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
