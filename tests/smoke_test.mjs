@@ -107,6 +107,22 @@ function makeInvocation() {
   check('result carries new sessionId', typeof result.sessionId === 'string')
 }
 
+// 用例 1b：preset 继承取 agent-preset/selected 事件（alpha.5 投影语义），header 仅兜底
+{
+  const { ctx, recorded } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.agent.session.header.agentPreset = 'code'
+  inv.agent.session.events = [
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'agent-preset/selected', seq: 1, time: 2, data: { agentPreset: 'standard' } },
+  ]
+  const result = await def.handler(inv)
+  check('preset event overrides header', result?.kind === 'success' && recorded.created[0]?.meta?.agentPreset === 'standard',
+    `kind=${result?.kind} agentPreset=${JSON.stringify(recorded.created[0]?.meta?.agentPreset)}`)
+}
+
 // 用例 2：空上下文（无消息）→ 无摘要，新会话无 seed
 {
   const { ctx, recorded } = makeCtx({})

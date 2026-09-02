@@ -169,7 +169,7 @@ npm test
 
 测试在 `@deepseek-ai/*` 依赖 `0.1.2-alpha.5` 下运行：
 
-- `tests/smoke_test.mjs`（33 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
+- `tests/smoke_test.mjs`（34 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
   provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
 - `tests/client_test.mjs`（9 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
