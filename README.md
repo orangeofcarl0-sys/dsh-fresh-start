@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.2--alpha.5-green)]()
+[![Version](https://img.shields.io/badge/version-1.3.1-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-green)]()
 [![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -118,11 +118,17 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.2-alpha.5` 为准（2026-09-03 跨越式更新适配，1.3.0）。插件依赖 dsh 内部 API
+以 `0.1.2-rc.1` 为准（2026-09-04 验证轮，1.3.1）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-1.3.0 对 alpha.5 的适配点：
+alpha.5 → rc.1：本插件用到的七个包（dsh-agent-presets / dsh-llm / dsh-session /
+dsh-compaction / dsh-permission-presets / dsh-client-modules / dsh-command-compact）
+发布产物逐字节比对，**lib 完全一致**，仅版本号与依赖范围重指（alpha.5 → rc.1 全线）；
+零代码改动，仅依赖声明与文档对齐。经 npm 实测 `^0.1.2-alpha.5` 范围**不含** rc.1
+（semver 预发布规则），故声明必须升至 `^0.1.2-rc.1`；cordis 依赖线同步对齐 `^4.0.2`。
+
+1.3.0 对 alpha.5 的适配点（rc.1 沿袭，仍有效）：
 
 - `@deepseek-ai/dsh-agent-presets#resolveSessionPreset` 已删除 → 内联等价实现
   （`agent-preset/selected` 事件倒序扫描取 `data.agentPreset`，回退

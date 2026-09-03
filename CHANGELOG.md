@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.1 - 2026-09-04
+
+兼容性验证轮：dsh `0.1.2-rc.1`（alpha.5 → rc.1）无破坏性变更，依赖声明与文档对齐。
+
+### 变更
+
+- **逐包发布产物比对（alpha.5 → rc.1）**：本插件用到的七个包（dsh-agent-presets、
+  dsh-llm、dsh-session、dsh-compaction、dsh-permission-presets、dsh-client-modules、
+  dsh-command-compact）lib 目录**字节级一致**，仅 package.json 版本号与依赖范围重指；
+  presets 目录（standard/minimal/ptc/cordis）不变。**零代码改动**。
+- **依赖声明对齐**：npm 实测 `^0.1.2-alpha.5` 范围不解析到 rc.1（semver 预发布规则），
+  peers/devDeps 升至 `^0.1.2-rc.1`；cordis peer/devDep 对齐宿主树的 `^4.0.2`。
+- 测试套件在 rc.1 依赖下重装实跑：34+9 断言 + std 清单 ALL PASS。
+- `dsh-plugin.json` 版本同步 1.3.1；README 徽章与兼容性节更新。
+
 ## 1.3.0 - 2026-09-03
 
 dsh `0.1.2-alpha.5` 适配轮（跨越式更新）。alpha.5 删除了本插件依赖的
