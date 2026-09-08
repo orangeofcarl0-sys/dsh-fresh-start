@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.3.2-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.3--alpha.2-green)]()
+[![Version](https://img.shields.io/badge/version-1.3.3-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.5--alpha.1-green)]()
 [![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -118,30 +118,29 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.3-alpha.2` 为准（2026-09-08 验证轮，1.3.2）。插件依赖 dsh 内部 API
+以 `0.1.5-alpha.1` 为准（2026-09-09 验证轮，1.3.3）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-rc.1 → 0.1.3-alpha.2 验证结论（子包分双线：agent-presets/permission-presets/
-client-modules 在 `0.1.3-alpha.2`，dsh-llm/session/compaction/command-compact 在
-`0.1.5-alpha.1`）：
+0.1.3-alpha.2 → 0.1.5-alpha.1 验证结论（v1.3.2 时 dsh-llm/session/compaction/
+command-compact 已在 0.1.5 线上，本轮增量仅 agent-presets、permission-presets、
+client-modules）：
 
 - **dsh-agent-presets**：`lib/index.js` 字节级一致（resolve/mount/serviceFor/
-  agent-preset/selected 语义不变），仅 typert 协议增量（file 块/AssistantStreamRecord）
-  与内置 preset 组合模板升级（ptc 等系统提示拆 prefix/suffix）；
-- **dsh-session**：事件面变更但**显式事件词表含本插件 seed 用到的全部类型**
-  （`approval/policy`、`permission/preset`、`sandbox/mode`），surfaceOp 仅
-  `append` 豁免校验——我们的 seed 形状仍合法；`SESSION_FORMAT_VERSION` 0→3 由
-  宿主迁移链处理（插件只消费 host API，不直接读写日志）；
-- **dsh-llm**：纯增量（新增 `createSystemMessage` 与 assistant-stream 助手），
-  `BlockAssembler` / `createUserMessage` 导出不变；
-- **dsh-compaction / dsh-permission-presets / dsh-client-modules /
-  dsh-command-compact**：仅 package.json 版本范围重指（lib 一致）。
-- `agents.create`（meta.parentSession/seed/setup）链路、`workspaceRegistry`
-  三件套、cordis `^4.0.2` 逐一核对未变；`^0.1.3-alpha.2` 范围经 npm 实测可解析
-  （声明显式对齐新线）。**零代码改动**，仅依赖声明与文档对齐。
+  agent-preset/selected 语义不变）；typert 协议类型级演进（surfaceOp 收窄为
+  `SurfaceIntent` 仍含 `surfaceOp` 字段、`EpochHeader.system` 移除、Inbox 接口化），
+  均为增量/类型调整，不影响运行时；
+- **dsh-permission-presets**：仅文档与 package.json（seeded 分支不变）；
+- **dsh-client-modules**：宿主连线重构（`webServer` 变可选 carrier），
+  `dsh.client.platform:"web"` 声明与 `window.__ModuleLoader__.load` 契约不变；
+- **已知行为漂移（上游）**：0.1.5 起 `session.requestHeader()` 的 canonical header
+  不再包含 `system`（系统提示迁移到 `createSystemMessage`/`systemPromptUpdate`
+  通道）；本插件条件透传（`system` 缺失时跳过），总结请求将不含 system 提示——
+  安全降级、不报错；若日后需要 system 参与总结，可改经新通道提取（待办）。
+- `session.header.{cwd,parentSession,agentPreset}` 校验原样、`agents.create` 链路
+  （含 workspaceRegistry 三件套）逐一核对未变；cordis 保持 `^4.0.2`。**零代码改动**。
 
-rc.1 对齐轮：`0.1.2-rc.1` 下七个依赖包 lib 与 alpha.5 字节级一致（详见 CHANGELOG）。
+rc.1 → 0.1.3-alpha.2 验证轮（子包双线）：结论见 CHANGELOG 1.3.2。
 
 1.3.0 对 alpha.5 的适配点（沿袭仍有效）：
 

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.3 - 2026-09-09
+
+兼容性验证轮：dsh `0.1.5-alpha.1`（v1.3.2 时 llm/session/compaction/command-compact
+已在 0.1.5 线上；本轮增量 agent-presets、permission-presets、client-modules），
+无破坏性变更，**零代码改动**，仅依赖声明与文档对齐。
+
+### 变更
+
+- **逐包发布产物比对（0.1.3-alpha.2 → 0.1.5-alpha.1）**：
+  - dsh-agent-presets：`lib/index.js` 字节级一致；typert 协议类型级演进
+    （`SurfaceIntent`（仍含 `surfaceOp`）/`EpochHeader.system` 移除/Inbox 接口化）
+    为增量与类型调整，不影响运行时；
+  - dsh-permission-presets：仅文档与 package.json（seeded 分支不变）；
+  - dsh-client-modules：宿主连线重构（webServer 变可选 carrier），声明与
+    `window.__ModuleLoader__` 契约不变；
+  - dsh-llm/session/compaction/command-compact：与 v1.3.2 验证版本一致（无变化）。
+- **已知行为漂移（上游，记录备用）**：0.1.5 起 `session.requestHeader()` 的
+  canonical header 不再含 `system`（系统提示迁移到 `createSystemMessage`/
+  `systemPromptUpdate` 通道）。插件条件透传安全降级——总结请求将不含 system 提示；
+  若需带 system 总结，可改经新通道提取（列为待办，本次未做）。
+- **依赖声明对齐**：peers/devDeps 的 `@deepseek-ai/dsh-agent-presets` 升至
+  `^0.1.5-alpha.1`（dsh-llm 仍在 `^0.1.5-alpha.1`，cordis `^4.0.2` 不变）；
+  `session.header.{cwd,parentSession,agentPreset}` 校验与 `agents.create` 链路逐一
+  核对未变。
+- 测试套件在 0.1.5 线依赖下重装实跑：73 断言（34+9+std）ALL PASS。
+- `dsh-plugin.json` 版本同步 1.3.3；README 徽章与兼容性节更新。
+
 ## 1.3.2 - 2026-09-08
 
 兼容性验证轮：dsh `0.1.3-alpha.2`（子包双线：agent-presets/permission-presets/
