@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.3.1-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.2--rc.1-green)]()
+[![Version](https://img.shields.io/badge/version-1.3.2-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.3--alpha.2-green)]()
 [![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -118,17 +118,32 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.2-rc.1` 为准（2026-09-04 验证轮，1.3.1）。插件依赖 dsh 内部 API
+以 `0.1.3-alpha.2` 为准（2026-09-08 验证轮，1.3.2）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-alpha.5 → rc.1：本插件用到的七个包（dsh-agent-presets / dsh-llm / dsh-session /
-dsh-compaction / dsh-permission-presets / dsh-client-modules / dsh-command-compact）
-发布产物逐字节比对，**lib 完全一致**，仅版本号与依赖范围重指（alpha.5 → rc.1 全线）；
-零代码改动，仅依赖声明与文档对齐。经 npm 实测 `^0.1.2-alpha.5` 范围**不含** rc.1
-（semver 预发布规则），故声明必须升至 `^0.1.2-rc.1`；cordis 依赖线同步对齐 `^4.0.2`。
+rc.1 → 0.1.3-alpha.2 验证结论（子包分双线：agent-presets/permission-presets/
+client-modules 在 `0.1.3-alpha.2`，dsh-llm/session/compaction/command-compact 在
+`0.1.5-alpha.1`）：
 
-1.3.0 对 alpha.5 的适配点（rc.1 沿袭，仍有效）：
+- **dsh-agent-presets**：`lib/index.js` 字节级一致（resolve/mount/serviceFor/
+  agent-preset/selected 语义不变），仅 typert 协议增量（file 块/AssistantStreamRecord）
+  与内置 preset 组合模板升级（ptc 等系统提示拆 prefix/suffix）；
+- **dsh-session**：事件面变更但**显式事件词表含本插件 seed 用到的全部类型**
+  （`approval/policy`、`permission/preset`、`sandbox/mode`），surfaceOp 仅
+  `append` 豁免校验——我们的 seed 形状仍合法；`SESSION_FORMAT_VERSION` 0→3 由
+  宿主迁移链处理（插件只消费 host API，不直接读写日志）；
+- **dsh-llm**：纯增量（新增 `createSystemMessage` 与 assistant-stream 助手），
+  `BlockAssembler` / `createUserMessage` 导出不变；
+- **dsh-compaction / dsh-permission-presets / dsh-client-modules /
+  dsh-command-compact**：仅 package.json 版本范围重指（lib 一致）。
+- `agents.create`（meta.parentSession/seed/setup）链路、`workspaceRegistry`
+  三件套、cordis `^4.0.2` 逐一核对未变；`^0.1.3-alpha.2` 范围经 npm 实测可解析
+  （声明显式对齐新线）。**零代码改动**，仅依赖声明与文档对齐。
+
+rc.1 对齐轮：`0.1.2-rc.1` 下七个依赖包 lib 与 alpha.5 字节级一致（详见 CHANGELOG）。
+
+1.3.0 对 alpha.5 的适配点（沿袭仍有效）：
 
 - `@deepseek-ai/dsh-agent-presets#resolveSessionPreset` 已删除 → 内联等价实现
   （`agent-preset/selected` 事件倒序扫描取 `data.agentPreset`，回退
@@ -173,7 +188,7 @@ npm install   # 安装 devDependencies（@deepseek-ai/* rc.2、@dsh-std/manifest
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.2-alpha.5` 下运行：
+测试在 `@deepseek-ai/*` 依赖 `0.1.3-alpha.2` 线下运行：
 
 - `tests/smoke_test.mjs`（34 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /

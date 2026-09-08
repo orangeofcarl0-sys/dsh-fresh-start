@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.2 - 2026-09-08
+
+兼容性验证轮：dsh `0.1.3-alpha.2`（子包双线：agent-presets/permission-presets/
+client-modules `0.1.3-alpha.2`，dsh-llm/session/compaction/command-compact
+`0.1.5-alpha.1`），无破坏性变更，依赖声明与文档对齐，**零代码改动**。
+
+### 变更
+
+- **逐包发布产物比对（rc.1 → 新线）**：
+  - dsh-agent-presets：`lib/index.js` 字节级一致；仅 typert 协议增量（file 块 /
+    AssistantStreamRecord）与内置 preset 组合模板升级（ptc 等系统提示拆 prefix/suffix）；
+  - dsh-session：`SESSION_FORMAT_VERSION` 0→3（宿主迁移链处理，插件只消费 host API）；
+    显式事件词表含本插件 seed 全部类型（`approval/policy`/`permission/preset`/
+    `sandbox/mode`），surfaceOp `append` 豁免校验——seed 形状仍合法；
+  - dsh-llm：纯增量（`createSystemMessage`、assistant-stream 助手），
+    `BlockAssembler`/`createUserMessage` 不变；
+  - dsh-compaction / dsh-permission-presets / dsh-client-modules /
+    dsh-command-compact：仅 package.json 重指（lib 一致）。
+- **依赖声明对齐**：peers/devDeps 升 `@deepseek-ai/dsh-agent-presets@^0.1.3-alpha.2`、
+  `@deepseek-ai/dsh-llm@^0.1.5-alpha.1`（cordis `^4.0.2` 不变）；`agents.create`
+  （meta.parentSession/seed/setup）与 `workspaceRegistry` 链路逐一核对未变。
+- 测试套件在新线依赖下重装实跑：34+9 断言 + std 清单 ALL PASS（73 断言）。
+- `dsh-plugin.json` 版本同步 1.3.2；README 徽章与兼容性节更新。
+
 ## 1.3.1 - 2026-09-04
 
 兼容性验证轮：dsh `0.1.2-rc.1`（alpha.5 → rc.1）无破坏性变更，依赖声明与文档对齐。
