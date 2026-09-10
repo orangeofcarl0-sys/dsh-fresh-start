@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.4 - 2026-09-10
+
+兼容性验证轮：dsh `0.1.5-rc.1`（0.1.5 线内 alpha.1 → rc.1 收敛），无破坏性变更，
+**零代码改动**，仅依赖声明与文档对齐。
+
+### 变更
+
+- **逐包发布产物比对（0.1.5-alpha.1 → 0.1.5-rc.1）**：
+  - dsh-session：事件词表与 `lib/index.js` 仅**新增** `deliverables/presented`、
+    `subagent/catalog` 两个事件类型；本插件 seed 的 `approval/policy` /
+    `permission/preset` / `sandbox/mode` 仍在词表；`canonicalHeader` 仍未含
+    `system`（1.3.3 记录的降级路径无变化）；
+  - dsh-agent-presets：`lib/index.js` 字节级一致；仅内置 preset 组合数据
+    （四个 agent.cordis.yml + minimal/preset.yml）与 typert 协议文件更新；
+  - dsh-llm：仅 typert 协议文件；dsh-compaction / dsh-permission-presets /
+    dsh-client-modules / dsh-command-compact：仅 package.json 重指。
+- **依赖声明对齐**：peers/devDeps 升 `^0.1.5-rc.1`（agent-presets 从 alpha.1
+  显式对齐；llm 此前已解析到 rc.1 但签名同步）；cordis `^4.0.2` 不变。
+- 测试套件在 rc.1 线依赖下重装实跑：73 断言（34+9+std）ALL PASS。
+- `dsh-plugin.json` 版本同步 1.3.4；README 徽章与兼容性节更新。
+
 ## 1.3.3 - 2026-09-09
 
 兼容性验证轮：dsh `0.1.5-alpha.1`（v1.3.2 时 llm/session/compaction/command-compact
