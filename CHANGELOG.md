@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.5 - 2026-09-11
+
+兼容性验证轮：dsh `0.1.5-rc.2`（rc.1 → rc.2），无破坏性变更，**零代码改动**，
+仅依赖声明与文档对齐。
+
+### 变更
+
+- **逐包发布产物比对（0.1.5-rc.1 → 0.1.5-rc.2）**：本插件用到的七个包
+  （dsh-agent-presets / dsh-llm / dsh-session / dsh-compaction /
+  dsh-permission-presets / dsh-client-modules / dsh-command-compact）发布产物
+  逐字节比对，**lib 与全部数据目录完全一致**，仅 package.json 版本号与依赖范围重指。
+- **依赖声明对齐**：peers/devDeps 升 `^0.1.5-rc.2`；cordis `^4.0.2` 不变。
+- 测试套件在 rc.2 线依赖下重装实跑：73 断言（34+9+std）ALL PASS。
+- `dsh-plugin.json` 版本同步 1.3.5；README 徽章与兼容性节更新。
+
 ## 1.3.4 - 2026-09-10
 
 兼容性验证轮：dsh `0.1.5-rc.1`（0.1.5 线内 alpha.1 → rc.1 收敛），无破坏性变更，

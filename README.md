@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
-[![Version](https://img.shields.io/badge/version-1.3.4-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.1-green)]()
+[![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-green)]()
 [![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -118,24 +118,17 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.5-rc.1` 为准（2026-09-10 验证轮，1.3.4）。插件依赖 dsh 内部 API
+以 `0.1.5-rc.2` 为准（2026-09-11 验证轮，1.3.5）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-0.1.5-alpha.1 → 0.1.5-rc.1 验证结论（同线收敛）：
+0.1.5-rc.1 → 0.1.5-rc.2 验证结论：本插件用到的七个包（dsh-agent-presets /
+dsh-llm / dsh-session / dsh-compaction / dsh-permission-presets /
+dsh-client-modules / dsh-command-compact）发布产物逐字节比对，**lib 与全部数据
+目录完全一致**，仅 package.json 版本号与依赖范围重指；零代码改动，仅依赖声明与
+文档对齐（peers/devDeps 升 `^0.1.5-rc.2`，cordis `^4.0.2` 不变）。
 
-- **dsh-session**：`lib/index.js` 与事件词表仅**新增**两个事件类型
-  （`deliverables/presented`、`subagent/catalog`）；本插件 seed 的
-  `approval/policy` / `permission/preset` / `sandbox/mode` 仍在词表；`requestHeader()`
-  的 canonical header 仍不含 `system`（沿用 1.3.3 记录的降级路径，无变化）；
-- **dsh-agent-presets**：`lib/index.js` 字节级一致，仅内置 preset 组合数据
-  （四个 agent.cordis.yml + minimal/preset.yml）与 typert 协议文件更新；
-- **dsh-llm**：仅 typert 协议文件；**compaction / permission-presets /
-  client-modules / command-compact**：仅 package.json 重指。cordis 保持 `^4.0.2`。
-- peers/devDeps 升 `^0.1.5-rc.1`（本插件用到的依赖与其他包在 0.1.5 线上已统一）；
-  **零代码改动**，仅依赖声明与文档对齐。
-
-0.1.3-alpha.2 → 0.1.5-alpha.1 验证轮：结论见 CHANGELOG 1.3.3。
+0.1.5-alpha.1 → 0.1.5-rc.1 验证轮：结论见 CHANGELOG 1.3.4。
 
 1.3.0 对 alpha.5 的适配点（沿袭仍有效）：
 
