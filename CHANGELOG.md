@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.0 - 2026-09-11
+
+移除 dsh-std 轨道（原 1.2.10 双轨制引入的惰性清单）。`/fresh` 功能零影响。
+
+### 变更
+
+- **删除**：`dsh-plugin.json`（Community v0.15 清单）、`lib/std/host.js`（占位宿主
+  facet 入口）、`tests/std_manifest_test.mjs`；package.json 同步清除 files/
+  keywords（dsh-std、community-v0.15）/devDependencies（`@dsh-std/manifest`）与
+  test 脚本项；README 移除 dsh-std 徽章与章节。
+- **删除理由**：std 生态自 2026-08-31 后停更（core/composition 停在 0.1.0-rc1）；
+  其 `adapter-dsh@0.1.1-rc.2` 的 peer 窗口为 `>=0.1.2-alpha.2 <0.1.3`，与本插件当前
+  宿主线（`0.1.5-rc.2`）不兼容——该轨道从未在真实宿主中生效（清单始终惰性，占位入口
+  空贡献）。保留仅剩发版同步成本与误导性宣传，故移除。
+- **重新评估触发条件**：`@dsh-std/adapter-dsh` 发布支持 0.1.5+ 宿主的版本、且 std
+  侧补齐可承载 session/workspace 生命周期能力的协议后。
+- 测试套件精简为 smoke（57）+ client（9）共 66 断言：ALL PASS（README 断言数同步校准）。
+
 ## 1.3.5 - 2026-09-11
 
 兼容性验证轮：dsh `0.1.5-rc.2`（rc.1 → rc.2），无破坏性变更，**零代码改动**，

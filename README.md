@@ -2,7 +2,6 @@
 
 [![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
 [![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-green)]()
-[![dsh-std](https://img.shields.io/badge/dsh--std-Community_v0.15-blue)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话**。
@@ -99,10 +98,8 @@ client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/d
 dsh-fresh-start/
 ├── lib/
 │   ├── index.js        # host 侧：/fresh 命令（总结 + 创建 + 归档）
-│   ├── client.js       # client 侧：监听归档事件，自动跳转
-│   └── std/host.js     # dsh-std 占位宿主入口（惰性，见下文）
+│   └── client.js       # client 侧：监听归档事件，自动跳转
 ├── cordis.patch.yml    # dsh bundle 挂载清单
-├── dsh-plugin.json     # dsh-std Community v0.15 清单（惰性）
 ├── docs/COMPACT_FIRST_SPEC.md
 └── tests/
 ```
@@ -152,38 +149,25 @@ dsh-client-modules / dsh-command-compact）发布产物逐字节比对，**lib �
 历史：rc.7 → rc.8、rc.1 → rc.2 时代的逐包发布产物比对均为增量变更（rc.2 中
 `sessions.create` 收窄的参数本插件从未使用）。
 
-### dsh-std（双轨制）
-
-1.2.10 起本插件**双轨制**：
-
-- **功能路径唯一**：`/fresh` 全部能力仍由原生 cordis 入口（`lib/index.js` +
-  `cordis.patch.yml`）提供，这是唯一的功能实现路径。
-- **dsh-std 清单（惰性）**：附带 dsh-std Community v0.15 的 `dsh-plugin.json`
-  （std 运行时包 `@dsh-std/core` / `@dsh-std/manifest` `0.1.0-rc1`，2026-08-18），宿主
-  facet 入口为占位实现 `lib/std/host.js`（空 `activate()`）。std 侧尚无 session/workspace
-  生命周期协议可承载本插件能力，故 `contributes.commands` 刻意留空——避免在装有
-  `@dsh-std/adapter-dsh` 的环境里向原生注册表投影第二个 `/fresh` 造成冲突。
-- **默认完全惰性**：dsh 原生加载器不读取 `dsh-plugin.json`；只有显式安装
-  `@dsh-std/adapter-dsh` 后清单才会被发现与校验（占位入口可通过其装载管线，空贡献 ⇒ 零投影）。
-- **前向兼容**：清单在 `@dsh-std/manifest@0.1.1-rc.1` 的新版校验器下同样可解析
-  （2026-08-28 实测；`@dsh-std/*` 已全线发布 0.1.1-rc.1，含 `adapter-dsh`）。
+> 1.4.0 起移除了 dsh-std Community v0.15 清单（原 `dsh-plugin.json` / 占位入口 /
+> 结构测试）：std 生态自 2026-08-31 后停更，其 `adapter-dsh` 的 peer 窗口
+> （`>=0.1.2-alpha.2 <0.1.3`）与本插件当前宿主线（0.1.5）不兼容，该轨道从未在真实
+> 宿主中生效；待生态恢复并补齐协议后再评估接入。移除不影响 `/fresh` 任何功能。
 
 ## 开发与测试
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/* rc.2、@dsh-std/manifest，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/* 0.1.5-rc.2 线，来自 npm）
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.3-alpha.2` 线下运行：
+测试在 `@deepseek-ai/*` 依赖 `0.1.5-rc.2` 线下运行：
 
-- `tests/smoke_test.mjs`（34 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
+- `tests/smoke_test.mjs`（57 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
   provider-model 不完整时回退与降级 / 取消中止 / header 异常结构化报错 —— ALL PASS
 - `tests/client_test.mjs`（9 断言）：归档后按 parentId 自动跳转 / pending 兜底补跳 /
   不相关归档不跳 / open 异常吞掉且不无限重试 —— ALL PASS
-- `tests/std_manifest_test.mjs`：`dsh-plugin.json` 的 Community v0.15 结构断言
-  （可解析 / 版本同步 / 入口存在）—— ALL PASS
 
 ## 已知局限
 
