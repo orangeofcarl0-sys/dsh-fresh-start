@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.5.0 - 2026-09-12
+
+适配 dsh `0.1.7-rc.1`：宿主包拆分（agent-presets → agent-preset +
+agent-preset-registry）、cordis 升 4.0.4、内置 preset 数据格式迁移。
+**零代码改动**（服务名与方法面不变），依赖声明迁移 + 文档。
+
+### 变更
+
+- **宿主包拆分**：`@deepseek-ai/dsh-agent-presets` 拆为 `dsh-agent-preset`（agent
+  facet）与 `dsh-agent-preset-registry`（服务提供方）。新 registry 仍以
+  `super(ctx, "agentPresets")` 注册服务，`resolve / mount / serviceFor / list`
+  签名不变。本插件自 1.3.0 起不再 import 该包（只用注入服务），故代码零改动；
+  peer/devDeps 从 `dsh-agent-presets` 迁移到 `dsh-agent-preset-registry ^0.1.7-rc.1`。
+- **cordis 4.0.2 → 4.0.4**（dsh-llm peer 声明为 `~4.0.4`）：本插件声明同步 `^4.0.4`。
+- **内置 preset 数据迁移**：YAML 组合（`agent.cordis.yml`）→
+  `dsh-web-app/presets/*.patch.yml`（cordis/minimal/ptc/standard），preset id 不变，
+  `/fresh <preset>` 与别名映射不受影响。
+- **compaction 面未变**：实现仍在 `dsh-compaction-basic`，`compactNow(agent, signal,
+  commandId)` 调用形状与返回字段同前。
+- 其余逐一核对未变：`session.requestHeader / deriveMessages`、seed 三 knob 事件在
+  词表、permission seeded 分支、`dsh.client.platform:"web"`、`commands.register`、
+  `agents.create`（seed/setup/meta.parentSession）、workspaceRegistry 三件套。
+- **依赖图简化**：agent-presets 退出后，测试安装不再需要 11 包 `--no-save` 辅助闭包
+  （仅 cordis + dsh-llm）；clean install 后 66 断言（57+9）ALL PASS。
+
 ## 1.4.0 - 2026-09-11
 
 移除 dsh-std 轨道（原 1.2.10 双轨制引入的惰性清单）。`/fresh` 功能零影响。

@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
 [![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.5--rc.2-green)]()
+[![dsh](https://img.shields.io/badge/dsh-0.1.7--rc.1-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话**。
@@ -115,17 +115,33 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.5-rc.2` 为准（2026-09-11 验证轮，1.3.5）。插件依赖 dsh 内部 API
+以 `0.1.7-rc.1` 为准（2026-09-12 验证轮，1.5.0）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-0.1.5-rc.1 → 0.1.5-rc.2 验证结论：本插件用到的七个包（dsh-agent-presets /
-dsh-llm / dsh-session / dsh-compaction / dsh-permission-presets /
-dsh-client-modules / dsh-command-compact）发布产物逐字节比对，**lib 与全部数据
-目录完全一致**，仅 package.json 版本号与依赖范围重指；零代码改动，仅依赖声明与
-文档对齐（peers/devDeps 升 `^0.1.5-rc.2`，cordis `^4.0.2` 不变）。
+0.1.5-rc.2 → 0.1.7-rc.1 验证结论：
 
-0.1.5-alpha.1 → 0.1.5-rc.1 验证轮：结论见 CHANGELOG 1.3.4。
+- **宿主包拆分（唯一破坏点，对插件为声明级）**：`@deepseek-ai/dsh-agent-presets`
+  拆为 `dsh-agent-preset`（agent facet）与 `dsh-agent-preset-registry`（服务提供方）。
+  新 registry 注册的 cordis 服务名仍为 `agentPresets`（`super(ctx, "agentPresets")`），
+  `resolve / mount / serviceFor / list` 方法签名不变——本插件自 1.3.0 起已不 import
+  该包（仅使用注入服务），故**零代码改动**，仅 peer/devDeps 迁移到
+  `dsh-agent-preset-registry ^0.1.7-rc.1`；
+- **cordis 4.0.2 → 4.0.4**（dsh-llm peer 为 `~4.0.4`）→ 声明同步 `^4.0.4`；
+- **内置 preset 数据迁移**：从 YAML 组合（`agent.cordis.yml`）改为
+  `dsh-web-app/presets/*.patch.yml`（cordis/minimal/ptc/standard），**preset id 不变**，
+  `/fresh <preset>` 与别名映射照常；
+- **compaction**：实现仍在 `dsh-compaction-basic`，`ctx.compaction.compactNow(agent,
+  signal, commandId)` 调用形状与返回（`shadowedSeqs` / `shadowedTokenCount` /
+  `summarySeq`）不变；
+- 其余逐一核对未变：`session.requestHeader / deriveMessages`、seed 的
+  `approval/policy` / `permission/preset` / `sandbox/mode` 仍在事件词表、
+  permission seeded 分支、`dsh.client.platform:"web"`、`commands.register`、
+  `agents.create`（seed/setup/meta.parentSession）、workspaceRegistry 三件套。
+  （`requestHeader()` 仍不含 `system` —— 沿用 1.3.3 记录的降级路径。）
+
+0.1.5-rc.1 → 0.1.5-rc.2 验证轮：七个依赖包 lib 与数据目录逐字节一致，结论见
+CHANGELOG 1.3.5。
 
 1.3.0 对 alpha.5 的适配点（沿袭仍有效）：
 
@@ -157,11 +173,12 @@ dsh-client-modules / dsh-command-compact）发布产物逐字节比对，**lib �
 ## 开发与测试
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/* 0.1.5-rc.2 线，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.1.7-rc.1 线 + cordis 4.0.4，来自 npm）
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.5-rc.2` 线下运行：
+测试在 `@deepseek-ai/*` 依赖 `0.1.7-rc.1` 线下运行（1.5.0 起依赖图不再含
+agent-presets，无需额外补装）：
 
 - `tests/smoke_test.mjs`（57 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /
