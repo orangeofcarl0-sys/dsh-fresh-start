@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.1 - 2026-09-13
+
+兼容性验证轮：dsh `0.1.7-rc.2`（rc.1 → rc.2，同线收敛），无破坏性变更，
+**零代码改动**，仅依赖声明与文档对齐。
+
+### 变更
+
+- **逐包发布产物比对（0.1.7-rc.1 → 0.1.7-rc.2）**：
+  - dsh-llm：纯增量（`createDeveloperMessage`、`projectToolUpdates`、tool 声明/
+    工具历史助手）；`BlockAssembler` / `createUserMessage` 不变；
+  - dsh-agent-preset-registry：服务名与 `resolve / mount / serviceFor` 不变；
+    `list()` 默认选中策略简化（移除 `modeSelectionEnabled`，回退
+    `selectedDefault ?? default`）——本插件不消费；
+  - dsh-session：新增 tool-history 折叠与类型；核心 API 与 seed knob 事件词表未变；
+  - dsh-permission-presets：Auto preset approval 策略 `never` → `ask`（及匹配逻辑）；
+    本插件 seed 预置 `workspace-write`/`ask`，seeded 分支不变，无影响；
+  - dsh-compaction / dsh-client-modules / dsh-command-compact：仅 package.json 重指。
+- **依赖声明对齐**：peers/devDeps 升 `^0.1.7-rc.2`；cordis 保持 `^4.0.4`。
+- 测试套件在 rc.2 线依赖下重装实跑：66 断言（57+9）ALL PASS。
+- README 徽章与兼容性节更新。
+
 ## 1.5.0 - 2026-09-12
 
 适配 dsh `0.1.7-rc.1`：宿主包拆分（agent-presets → agent-preset +
