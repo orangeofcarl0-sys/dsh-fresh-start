@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
 [![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.1.7--rc.2-green)]()
+[![dsh](https://img.shields.io/badge/dsh-0.2.0--rc.2-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话**。
@@ -115,27 +115,36 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.1.7-rc.2` 为准（2026-09-13 验证轮，1.5.1）。插件依赖 dsh 内部 API
+以 `0.2.0-rc.2` 为准（2026-09-30 大版本适配，1.6.0）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-0.1.7-rc.1 → 0.1.7-rc.2 验证结论（同线收敛，**零代码改动**）：
+**0.1.7-rc.2 → 0.2.0-rc.2：唯一破坏点是新增的 peer 版本门禁**，插件代码零改动。
 
-- **dsh-llm**：纯增量——新增 `createDeveloperMessage`、`projectToolUpdates` 与
-  tool 声明/工具历史相关助手；`BlockAssembler` / `createUserMessage` 导出不变；
-- **dsh-agent-preset-registry**：服务名（`agentPresets`）与 `resolve / mount /
-  serviceFor` 不变；变更集中在 `list()` 的默认选中策略（移除 `modeSelectionEnabled`
-  开关，默认回退到 `selectedDefault ?? default`）——本插件不消费该策略；
-- **dsh-session**：新增 tool-history 折叠与 `tool-history.js` 类型；`requestHeader /
-  deriveMessages` 与 seed 三 knob 事件词表未变；
-- **dsh-permission-presets**：变更集中在 Auto preset 的 approval 策略
-  （`never` → `ask` 及匹配逻辑）——本插件 seed 预置 `workspace-write`/`ask`，
-  seeded 分支与 knob 处理不变，无影响；
-- **dsh-compaction / dsh-client-modules / dsh-command-compact**：仅 package.json
-  重指；cordis 保持 `4.0.4`。
-- peers/devDeps 升 `^0.1.7-rc.2`；66 断言（57+9）ALL PASS。
+- **peer 版本门禁（0.2.0 新增，本插件的实际断点）**：宿主启动时用
+  `dsh-app-boot` 的 `evaluatePluginCompatibility` 校验每个 profile bundle 的
+  `package.json` 中所有 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 前缀 peer 范围
+  是否满足运行时版本（预发布参与比较）；不满足即 `skipping profile bundle` 并
+  整个跳过该插件（旧版是静默加载）。1.5.1 声明的 `^0.1.7-rc.2` 对 `0.2.0-rc.2`
+  不成立，故被跳过 → 本版把两个 dsh peer 升到 `^0.2.0-rc.2`。
+  `@deepseek-ai/cordis` 无 `dsh-` 前缀，不参与该校验（仍 `^4.0.4`）。
+- **插件管理机制变化（不影响本插件形态）**：新增 `dsh-plugin-manager` 服务与
+  Web 侧边栏 Plugins 页；bundle 的启用/禁用改由 profile `cordis.patch.yml` 的
+  `disabled` 覆盖行管理，安装/移除走 `pnpm add`。本插件的 `dsh.bundle.patch` +
+  `dsh.client.platform` 声明与 `- insert:` patch 形态在新机制下仍然有效（与
+  `dsh-checkpoint-rewind` 等在用插件一致），无需改动。
+- **其余 API 逐一核对 0.2.0 全部健在**：`agentPresets` 服务（仍由
+  `dsh-agent-preset-registry` 提供，服务名与 `resolve/mount/serviceFor` 不变）、
+  `agents.create(options)`（`dsh-agent` 的 `AgentRegistry`，单对象签名）、
+  `workspaceRegistry`（`archiveSession / resolveByPath / attachSession`，由
+  `dsh-workspace` 提供）、`ctx.compaction.compactNow(agent, signal, commandId)`、
+  `commands.register`、`session.requestHeader / deriveMessages`、seed 三 knob 事件
+  仍在词表、`BlockAssembler / createUserMessage` 导出不变、`dsh.client.platform:"web"`。
+  （`requestHeader()` 仍不含 `system` —— 沿用 1.3.3 记录的降级路径。）
+- 依赖图进一步简化：0.2.0 下 clean install 后无需任何 `--no-save` 辅助闭包，
+  66 断言（57+9）ALL PASS。
 
-0.1.5-rc.2 → 0.1.7-rc.1 验证轮（含包拆分）：结论见 CHANGELOG 1.5.0。
+0.1.7-rc.1 → 0.1.7-rc.2 验证轮：结论见 CHANGELOG 1.5.1。
 
 1.3.0 对 alpha.5 的适配点（沿袭仍有效）：
 
@@ -167,12 +176,12 @@ dsh-fresh-start/
 ## 开发与测试
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.1.7-rc.2 线 + cordis 4.0.4，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.2.0-rc.2 + cordis 4.0.4，来自 npm）
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.1.7-rc.2` 线下运行（1.5.0 起依赖图不再含
-agent-presets，无需额外补装）：
+测试在 `@deepseek-ai/*` 依赖 `0.2.0-rc.2` 下运行（依赖图不含 agent-presets，
+无需额外补装）：
 
 - `tests/smoke_test.mjs`（57 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
   无 workspaces 降级 / `parentSession` 标记 / 不污染 `deriveMessages()` 返回值 /

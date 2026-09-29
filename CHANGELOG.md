@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.0 - 2026-09-30
+
+适配 dsh `0.2.0-rc.2`（大版本更新）。**唯一破坏点是 0.2.0 新增的 peer 版本门禁**，
+插件代码零改动；peer 声明升级即可恢复加载。
+
+### 变更
+
+- **peer 版本门禁（0.2.0 新增）**：宿主启动时经 `dsh-app-boot` 的
+  `evaluatePluginCompatibility` 校验每个 profile bundle 的 `peerDependencies` 中
+  所有 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 范围是否满足运行时版本（预发布
+  参与比较，`includePrerelease: true`）；不满足则 `skipping profile bundle` 并整体
+  跳过（旧版静默加载）。1.5.1 的 `^0.1.7-rc.2` 对 `0.2.0-rc.2` 不成立 → 被跳过。
+  **修复**：两个 dsh peer 升 `^0.2.0-rc.2`；`@deepseek-ai/cordis` 无 `dsh-` 前缀，
+  不参与校验（保持 `^4.0.4`）。
+- **插件管理机制重构（不影响本插件形态）**：新增 `dsh-plugin-manager`（服务 +
+  Web 侧边栏 Plugins 页），bundle 启用/禁用改为 profile `cordis.patch.yml` 的
+  `disabled` 覆盖行，安装/移除走 `pnpm add` 且含 registry 回退与 Git 预检。本插件的
+  `dsh.bundle.patch` + `dsh.client.platform` 声明与 `- insert:` patch 形态在新机制下
+  仍有效（与在用的第三方 bundle 一致），无需改动。
+- **其余 API 在 0.2.0 下逐一核对全部健在**：`agentPresets`（仍由
+  `dsh-agent-preset-registry` 提供，服务名与 `resolve/mount/serviceFor` 不变）、
+  `agents.create(options)`（`dsh-agent` 的 `AgentRegistry`）、`workspaceRegistry`
+  （`dsh-workspace` 提供 `archiveSession / resolveByPath / attachSession`）、
+  `compaction.compactNow(agent, signal, commandId)`、`commands.register`、
+  `session.requestHeader / deriveMessages`、seed 三 knob 事件词表、
+  `BlockAssembler / createUserMessage`、`dsh.client.platform:"web"`。
+- 依赖图简化：0.2.0 下 clean install 后无需 `--no-save` 辅助闭包；
+  66 断言（57+9）ALL PASS。
+- README 徽章与兼容性节更新（含门禁机制说明）。
+
 ## 1.5.1 - 2026-09-13
 
 兼容性验证轮：dsh `0.1.7-rc.2`（rc.1 → rc.2，同线收敛），无破坏性变更，
