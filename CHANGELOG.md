@@ -7,13 +7,30 @@
 
 ### 变更
 
-- **peer 版本门禁（0.2.0 新增）**：宿主启动时经 `dsh-app-boot` 的
-  `evaluatePluginCompatibility` 校验每个 profile bundle 的 `peerDependencies` 中
-  所有 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 范围是否满足运行时版本（预发布
-  参与比较，`includePrerelease: true`）；不满足则 `skipping profile bundle` 并整体
-  跳过（旧版静默加载）。1.5.1 的 `^0.1.7-rc.2` 对 `0.2.0-rc.2` 不成立 → 被跳过。
-  **修复**：两个 dsh peer 升 `^0.2.0-rc.2`；`@deepseek-ai/cordis` 无 `dsh-` 前缀，
-  不参与校验（保持 `^4.0.4`）。
+- **peer 版本门禁（0.2.0 新增，已用官方 0.1.7 app-boot 比对确认）**：宿主启动时经
+  `dsh-app-boot` 的 `evaluatePluginCompatibility` 校验每个 profile bundle 的
+  `peerDependencies` 中所有 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 范围是否满足
+  运行时版本（预发布参与比较，`includePrerelease: true`）；不满足则
+  `skipping profile bundle` 并整体跳过（旧版静默加载）。1.5.1 的 `^0.1.7-rc.2` 对
+  `0.2.0-rc.2` 不成立 → 被跳过。**修复**：两个 dsh peer 升 `^0.2.0-rc.2`；
+  `@deepseek-ai/cordis` 无 `dsh-` 前缀，不参与校验（保持 `^4.0.4`）。
+- **client 半边交付形式变化（不影响本插件，但排障须知）**：0.2.0 起 client 脚本
+  由「每包一个 `/plugins/<pkg>/client.js`」改为**组合脚本**
+  `plugins/??pkg1/client.js,pkg2/client.js&rev=<hash>`；裸包路径不再响应（404 属
+  正常），排障时须带 `?rev=`。本插件的 `dsh.client.platform:"web"` +
+  `exports["./client"]` 声明满足新扫描条件，实测已被正确组合。
+- **真机端到端验证（隔离测试 profile，未触碰生产 web profile）**：
+  - 门禁放行：`dsh --dump-config` 中 `dsh-fresh-start` 无 `skipping` 行，patch 层
+    `- id: fresh-start` 进入组合树；`dsh plugin add` 还自动将其加入
+    `dsh.profile.bundles`（0.2.0「安装即启用」）；
+  - 宿主激活：真实 web 结构 profile 启动日志输出
+    `[fresh-start] installed: /fresh command registered`（`/fresh` 注册成功）；
+  - client 交付：`plugins/??dsh-fresh-start/client.js&rev=…` 返回 **200 / 3420 B**，
+    内容含 `__ModuleLoader__` 注册与 `host/archived-sessions-changed` / `parentId` /
+    `sessions.open` 全部逻辑；
+  - headless profile 下 entry 为 `pending (waiting for services: agentPresets,
+    workspaceRegistry)` —— 这两个服务由 **web-app bundle** 提供，headless/base 不含，
+    属 profile 差异（cordis inject 等待机制正常），非兼容性问题。
 - **插件管理机制重构（不影响本插件形态）**：新增 `dsh-plugin-manager`（服务 +
   Web 侧边栏 Plugins 页），bundle 启用/禁用改为 profile `cordis.patch.yml` 的
   `disabled` 覆盖行，安装/移除走 `pnpm add` 且含 registry 回退与 Git 预检。本插件的

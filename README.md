@@ -130,9 +130,22 @@ dsh-fresh-start/
   `@deepseek-ai/cordis` 无 `dsh-` 前缀，不参与该校验（仍 `^4.0.4`）。
 - **插件管理机制变化（不影响本插件形态）**：新增 `dsh-plugin-manager` 服务与
   Web 侧边栏 Plugins 页；bundle 的启用/禁用改由 profile `cordis.patch.yml` 的
-  `disabled` 覆盖行管理，安装/移除走 `pnpm add`。本插件的 `dsh.bundle.patch` +
+  `disabled` 覆盖行管理，安装/移除走 `pnpm add`，安装后自动加入
+  `dsh.profile.bundles`（安装即启用）。本插件的 `dsh.bundle.patch` +
   `dsh.client.platform` 声明与 `- insert:` patch 形态在新机制下仍然有效（与
   `dsh-checkpoint-rewind` 等在用插件一致），无需改动。
+- **client 半边交付形式变化（排障须知）**：0.2.0 起 client 脚本由「每包一个
+  `/plugins/<pkg>/client.js`」改为组合脚本
+  `plugins/??pkg1/client.js,pkg2/client.js&rev=<hash>`；裸包路径不再响应（404 正常），
+  排障时须带 `?rev=`。本插件满足新扫描条件（`dsh.client.platform:"web"` +
+  `exports["./client"]`），实测已被正确组合。
+- **真机端到端验证**（隔离测试 profile）：门禁放行（`--dump-config` 无 skipping
+  行、patch 层进树）；真实 web 结构 profile 启动日志输出
+  `[fresh-start] installed: /fresh command registered`；client 组合脚本
+  `plugins/??dsh-fresh-start/client.js&rev=…` 返回 200 且内容含
+  `__ModuleLoader__` 注册与跳转逻辑。headless profile 下 entry 为
+  `pending (waiting for services: agentPresets, workspaceRegistry)`——这两个服务由
+  web-app bundle 提供，属 profile 差异，非兼容性问题。
 - **其余 API 逐一核对 0.2.0 全部健在**：`agentPresets` 服务（仍由
   `dsh-agent-preset-registry` 提供，服务名与 `resolve/mount/serviceFor` 不变）、
   `agents.create(options)`（`dsh-agent` 的 `AgentRegistry`，单对象签名）、
