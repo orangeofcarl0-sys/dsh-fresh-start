@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.1 - 2026-10-11
+
+npm 发布准备：按 dsh 官方 bundle 规范与权威插件（dsh-better-sidebar /
+dsh-checkpoint-rewind / dsh-rules-manager）形态补齐发布元数据。
+
+### 变更
+
+- **新增 Plugin Manager 显示元数据**（官方 `cordis-plugin-development` skill
+  「Display metadata and icon」规范）：`locale/en.json` + `locale/zh.json`
+  （`meta.title` / `meta.description`）与 `icon.svg`；`package.json` 增加顶层
+  `icon` 字段、`exports` 暴露 `./locale/*.json` 与 `./cordis.patch.yml`
+  （宿主 `readPluginMeta` 经 `${specifier}/locale/en.json` 子路径解析，缺则卡片
+  退化为默认文案）。已用宿主 `readPluginMeta` 实测：双语标题描述与 icon
+  data URI 均正确读出。
+- **发布元数据**：`engines.node >= 22`、`publishConfig.access: "public"`、
+  `prepublishOnly` 自动跑测试、`files` 补 `locale/*.json` / `icon.svg` /
+  `README.md` / `LICENSE` / `CHANGELOG.md`。
+- **发布物验证**：`npm pack --dry-run` 产出 10 文件 / 23.0 kB；tarball 装入隔离
+  profile 实测——门禁 0 跳过、`[fresh-start] installed: /fresh command registered`
+  正常输出、locale 与 icon 就位。
+- README 安装节新增 npm 渠道（`dsh plugin --profile web add dsh-fresh-start`）与
+  Plugins 页说明；新增「发布」章节记录发布物与官方规范对应关系。
+
 ## 1.6.0 - 2026-09-30
 
 适配 dsh `0.2.0-rc.2`（大版本更新）。**唯一破坏点是 0.2.0 新增的 peer 版本门禁**，

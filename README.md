@@ -18,21 +18,31 @@ DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启
 
 ### 安装
 
+从 npm（推荐）：
+
+```sh
+dsh plugin --profile web add dsh-fresh-start
+```
+
+或直接从 GitHub 仓库安装：
+
 ```sh
 dsh plugin --profile web add github:orangeofcarl0-sys/dsh-fresh-start
 ```
 
-插件源为 GitHub 仓库（不走本地路径）。之后插件发新版，同步仓库后更新：
+之后插件发新版，更新：
 
 ```sh
 dsh plugin --profile web update dsh-fresh-start
 ```
 
+安装后 dsh 会自动把它加入 profile 的 `dsh.profile.bundles`（0.2.0 起「安装即启用」）。
 重启 `dsh web`，日志出现 `[fresh-start] installed: /fresh command registered` 即成功。
-client 插件会随 `dsh.client` 声明自动进入浏览器清单（`/plugins/dsh-fresh-start/client.js`
-返回 200）。
+client 插件会随 `dsh.client` 声明进入浏览器组合脚本（0.2.0 起为
+`plugins/??dsh-fresh-start/client.js&rev=…`）。
 
 > 若 profile 的 `cordis.patch.yml` 里已有本插件的手工挂载行，请先删除，否则会双实例。
+> 插件在 Web 侧边栏 **Plugins** 页可查看与启停（卡片显示 `locale/` 里的标题描述与 `icon.svg`）。
 
 ### 使用
 
@@ -206,6 +216,28 @@ npm test
 
 - 总结依赖 `session.deriveMessages()`（dsh 上传的完整上下文），超大会话的上下文若超出
   模型窗口，总结可能失败（此时仍会开新对话 + 归档，只是新对话不带摘要）。
+
+## 发布
+
+包已按 dsh 官方 bundle 规范与 npm 发布惯例准备，可直接 `npm publish`：
+
+```sh
+npm publish        # prepublishOnly 会自动跑测试；发布到 npm 公共 registry
+```
+
+发布物（`npm pack --dry-run` 可核对）：`lib/`（host + client）、`cordis.patch.yml`、
+`locale/*.json`（Plugin Manager 卡片显示文本）、`icon.svg`、README/LICENSE/CHANGELOG。
+
+关键声明与官方规范对齐：
+
+- `dsh.bundle.patch` 指向 `cordis.patch.yml`（bundle 挂载）；
+- `dsh.client.platform: "web"` + `exports["./client"]`（浏览器半边交付条件）；
+- `exports` 暴露 `./locale/*.json` 与 `./package.json`（宿主 `readPluginMeta` 经子路径
+  读取显示元数据与图标，缺任一项卡片就退化为默认文案）；
+- `icon` 为相对路径（SVG ≤256 KiB），发布时由宿主内联为 data URI；
+- `peerDependencies` 精确声明 dsh 运行时线（0.2.0 起有 peer 门禁，范围不符会被
+  `skipping profile bundle` 整体跳过）；
+- `engines.node >= 22`、`publishConfig.access: "public"`。
 
 ## 更新日志
 

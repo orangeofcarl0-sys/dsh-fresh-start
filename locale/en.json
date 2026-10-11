@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Fresh Start",
+    "description": "Summarize the current conversation, start a new one seeded with the summary, and archive the old one — relieving memory pressure and lag in very large sessions."
+  }
+}
