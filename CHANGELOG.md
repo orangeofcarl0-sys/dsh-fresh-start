@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.7.1 - 2026-10-17
+
+适配 dsh `0.2.1-rc.2`。rc.2 本身是模型/Search API 适配的小版本，**官方插件规范与
+rc.1 完全一致**（`cordis-plugin-development` skill 文件字节相同）；本轮做完整链路
+复核 + 声明对齐。
+
+### 变更
+
+- **声明对齐 rc.2**：`engines.dsh` 升 `^0.2.1-rc.2`；peers/devDeps 的
+  `dsh-agent-preset-registry`、`dsh-llm` 升 `^0.2.1-rc.2`（cordis 保持 `^4.0.5`）。
+- **完整作用链路复核（0.2.1-rc.2 实测）**：
+  - 门禁 `unmetRequirements`：`engines.dsh` 优先、peer 被忽略的规则未变；
+  - icon：`iconOf` 仍优先顶层 `icon`、回退 `./icon` 导出，路径/大小/格式校验未变；
+  - locale：仍经 `${specifier}/locale/en.json` 子路径解析；
+  - client：`dsh.client.platform:"web"` + `exports["./client"]` 扫描条件未变；
+  - API：`agentPresets`（服务名与 resolve/mount/serviceFor）、`agents.create(options)`、
+    `workspaceRegistry` 三件套、`compactNow(agent, signal, commandId)`、
+    `commands.register`、`requestHeader/deriveMessages`、seed 三 knob 事件词表、
+    `BlockAssembler/createUserMessage` 全部健在。
+- **真机端到端验证**（隔离 profile）：npm 安装 → 门禁 0 跳过 → entry 进组合树 →
+  启动日志 `[fresh-start] installed: /fresh command registered` → client 组合脚本
+  200 → `readPluginMeta` 双语元数据 + icon 无 error。
+- 66 断言（57+9）ALL PASS。
+
+### 0.2.1-rc.2 的插件管理相关变化
+
+- 发布说明层面：新增 DeepSeek-V4.1-Flash-1017 模型适配、DeepSeek Search 与 Fetch
+  API 支持；无插件规范破坏性变更。
+- **实测发现：pnpm 新版本冷却策略**（0.2.1 起）——`dsh plugin add <pkg>` 默认不会
+  安装刚发布不久的版本（1.7.0 发布约 8 小时后仍解析到 1.6.1）。需要最新版时用
+  **精确版本** `dsh plugin add <pkg>@<version>`，插件管理器会把它写入
+  `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`。这是预期行为，非插件缺陷。
+
 ## 1.7.0 - 2026-10-17
 
 适配 dsh `0.2.1-rc.1`，按 0.2.1 更新后的官方插件规范（`cordis-plugin-development`
