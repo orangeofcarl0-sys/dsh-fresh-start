@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.7.0 - 2026-10-17
+
+适配 dsh `0.2.1-rc.1`，按 0.2.1 更新后的官方插件规范（`cordis-plugin-development`
+skill）升级。插件代码零改动。
+
+### 变更
+
+- **兼容性声明改用 `engines.dsh`**（0.2.1 首选形式）：0.2.1 的
+  `unmetRequirements` 规定「own `engines.dsh` 存在时单独决定兼容性，
+  `peerDependencies` 被完全忽略」；此前只有 peer 一条路。现声明
+  `engines: { node: ">=22", dsh: "^0.2.1-rc.1" }`，语义更明确且不再受
+  peer 列表逐项比对影响（peer 保留供包管理器使用）。
+- **`exports` 新增 `./icon`**：0.2.1 规范的 display checklist 要求导出
+  `./locale/*.json` 与 `./icon`。宿主 `iconOf` 优先读顶层 `icon` 字段、缺失时
+  回退 `./icon` 导出——两条路径现已都指向 `./icon.svg`。
+- **依赖线对齐 0.2.1**：peers/devDeps 升 `@deepseek-ai/dsh-llm@^0.2.1-rc.1`、
+  `@deepseek-ai/dsh-agent-preset-registry@^0.2.1-rc.1`、cordis `^4.0.5`
+  （宿主树为 4.0.5）。
+- **API 面核对（0.2.1 全绿）**：`agentPresets` 服务名与 `resolve/mount/serviceFor`
+  不变；`agents.create(options)`；`workspaceRegistry` 的
+  `archiveSession/resolveByPath/attachSession`；`compaction.compactNow(agent,
+  signal, commandId)`；`commands.register`；`session.requestHeader/deriveMessages`；
+  seed 三 knob 事件词表；`BlockAssembler/createUserMessage`；
+  `dsh.client.platform:"web"` 与组合脚本交付。
+- **真机验证**（隔离 profile，生产 profile 未动）：门禁 0 跳过、entry 进组合树；
+  启动日志 `[fresh-start] installed: /fresh command registered`；client 组合脚本
+  200；宿主 `readPluginMeta` 读出双语标题/描述与 icon data URI，无 error；
+  66 断言（57+9）ALL PASS。
+
+### 0.2.1 的插件管理变化（背景）
+
+- 新增自定义插件索引源（`dsh-experimental-plugin-market-bundle`），可从第三方源
+  发现与安装插件；
+- 插件启用/停用/卸载/更新后自动同步依赖，HMR 开启时可替换插件直接生效；
+- 可选插件支持极简模式，官方插件列表支持按需安装；
+- 新增实验性 Session 状态记录接口供插件读写自身会话记录。
+
 ## 1.6.1 - 2026-10-11
 
 npm 发布准备：按 dsh 官方 bundle 规范与权威插件（dsh-better-sidebar /

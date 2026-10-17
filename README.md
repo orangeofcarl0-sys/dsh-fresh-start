@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
 [![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.2.0--rc.2-green)]()
+[![dsh](https://img.shields.io/badge/dsh-0.2.1--rc.1-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话**。
@@ -125,19 +125,38 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.2.0-rc.2` 为准（2026-09-30 大版本适配，1.6.0）。插件依赖 dsh 内部 API
+以 `0.2.1-rc.1` 为准（2026-10-17 适配，1.7.0）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-**0.1.7-rc.2 → 0.2.0-rc.2：唯一破坏点是新增的 peer 版本门禁**，插件代码零改动。
+**0.2.0-rc.2 → 0.2.1-rc.1：插件代码零改动**，按 0.2.1 更新的官方规范调整声明。
 
-- **peer 版本门禁（0.2.0 新增，本插件的实际断点）**：宿主启动时用
+- **兼容性声明改用 `engines.dsh`（0.2.1 首选）**：0.2.1 的 `unmetRequirements`
+  规定——插件若声明了自己的 `engines.dsh`，该范围**单独决定**兼容性，
+  `peerDependencies` 被完全忽略；未声明时才逐项比对 `@deepseek-ai/dsh*` peers。
+  本插件声明 `dsh: "^0.2.1-rc.1"`，语义更明确（peer 保留供包管理器解析）。
+- **`exports` 新增 `./icon`**：0.2.1 的 display checklist 要求导出
+  `./locale/*.json` 与 `./icon`；宿主 `iconOf` 优先读顶层 `icon`、缺失时回退
+  `./icon` 导出，现两条路径都指向 `./icon.svg`。
+- **依赖线**：peers/devDeps 升 `dsh-llm@^0.2.1-rc.1`、
+  `dsh-agent-preset-registry@^0.2.1-rc.1`、cordis `^4.0.5`。
+- **API 面 0.2.1 全绿**：`agentPresets`（服务名与 `resolve/mount/serviceFor` 不变）、
+  `agents.create(options)`、`workspaceRegistry` 三件套、
+  `compaction.compactNow(agent, signal, commandId)`、`commands.register`、
+  `session.requestHeader / deriveMessages`、seed 三 knob 事件词表、
+  `BlockAssembler / createUserMessage`、`dsh.client.platform:"web"`。
+- **真机验证**（隔离 profile）：门禁 0 跳过、`/fresh command registered` 正常输出、
+  client 组合脚本 200、宿主 `readPluginMeta` 读出双语元数据与 icon，无 error。
+
+0.1.7-rc.2 → 0.2.0-rc.2 验证轮（1.6.0，结论见 CHANGELOG 1.6.0）：
+
+- **peer 版本门禁（0.2.0 新增，当时的实际断点）**：宿主启动时用
   `dsh-app-boot` 的 `evaluatePluginCompatibility` 校验每个 profile bundle 的
   `package.json` 中所有 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 前缀 peer 范围
   是否满足运行时版本（预发布参与比较）；不满足即 `skipping profile bundle` 并
   整个跳过该插件（旧版是静默加载）。1.5.1 声明的 `^0.1.7-rc.2` 对 `0.2.0-rc.2`
-  不成立，故被跳过 → 本版把两个 dsh peer 升到 `^0.2.0-rc.2`。
-  `@deepseek-ai/cordis` 无 `dsh-` 前缀，不参与该校验（仍 `^4.0.4`）。
+  不成立，故被跳过 → 当时把两个 dsh peer 升到 `^0.2.0-rc.2`。
+  （0.2.1 起改用 `engines.dsh` 优先，见上。）
 - **插件管理机制变化（不影响本插件形态）**：新增 `dsh-plugin-manager` 服务与
   Web 侧边栏 Plugins 页；bundle 的启用/禁用改由 profile `cordis.patch.yml` 的
   `disabled` 覆盖行管理，安装/移除走 `pnpm add`，安装后自动加入
@@ -199,11 +218,11 @@ dsh-fresh-start/
 ## 开发与测试
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.2.0-rc.2 + cordis 4.0.4，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.2.1-rc.1 + cordis 4.0.5，来自 npm）
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.2.0-rc.2` 下运行（依赖图不含 agent-presets，
+测试在 `@deepseek-ai/*` 依赖 `0.2.1-rc.1` 下运行（依赖图不含 agent-presets，
 无需额外补装）：
 
 - `tests/smoke_test.mjs`（57 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
