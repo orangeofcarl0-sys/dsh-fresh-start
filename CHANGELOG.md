@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.7.2 - 2026-10-24
+
+适配 dsh `0.2.1-rc.3`。rc.3 发布说明仅 UI 改进（侧栏「更多」菜单）与草稿修复，
+**官方插件规范与 rc.2 字节相同**；本轮做完整链路复核 + 声明对齐。
+
+### 变更
+
+- **声明对齐 rc.3**：`engines.dsh` 升 `^0.2.1-rc.3`；peers/devDeps 的
+  `dsh-agent-preset-registry`、`dsh-llm` 升 `^0.2.1-rc.3`（cordis 保持 `^4.0.5`）。
+- **完整作用链路复核（rc.3 实测全部未变）**：
+  - 门禁 `unmetRequirements`：`engines.dsh` 优先、peer 被忽略；
+  - icon：`iconOf` 顶层 `icon` 优先、回退 `./icon` 导出；
+  - locale：`${specifier}/locale/en.json` 子路径解析；
+  - client：`dsh.client.platform:"web"` + `exports["./client"]` 扫描条件；
+  - API：`agentPresets`（服务名 + resolve/mount/serviceFor）、`agents.create(options)`、
+    `workspaceRegistry` 三件套、`compactNow(agent, signal, commandId)`、
+    `commands.register`、`requestHeader/deriveMessages`、seed 四类事件词表、
+    `BlockAssembler/createUserMessage`。
+- **真机端到端验证**（隔离 profile）：npm 安装 → 门禁 0 跳过 → entry 进组合树 →
+  `[fresh-start] installed: /fresh command registered` → client 组合脚本 200 →
+  `readPluginMeta` 双语元数据 + icon 无 error。
+- 66 断言（57+9）ALL PASS。
+
+### 排障记录：`pending (waiting for services)` 的真实成因
+
+首次验证时 entry 报 `pending (waiting for services: agentPresets, workspaceRegistry)`。
+排查确认**不是 rc.3 兼容性问题**，而是该测试 profile 的
+`dsh.profile.bundles` 只有 `["@deepseek-ai/dsh-base", "dsh-fresh-start"]`——
+缺少 `@deepseek-ai/dsh-web-app`（这两个服务由它提供）。补上 web-app 后立即正常激活。
+`--from-default-profile web` 初始化被中断时可能留下不完整的 bundles 列表，遇到此类
+pending 应先核对 bundles 是否含 web-app。
+
 ## 1.7.1 - 2026-10-17
 
 适配 dsh `0.2.1-rc.2`。rc.2 本身是模型/Search API 适配的小版本，**官方插件规范与
