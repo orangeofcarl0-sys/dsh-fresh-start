@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.8.0 - 2026-11-06
+
+适配 dsh `0.2.2-rc.1`。**插件代码零改动**，依赖声明与规范核对同步。
+
+### 0.2.2-rc.1 的插件相关变化
+
+- 插件管理页支持**更新第三方插件包**，热更新失败时自动恢复旧版本；
+- 插件管理页支持**富文本详情**，改善页面布局与导航；
+- 会话列表支持插件图标。
+- 官方规范 `cordis-plugin-development` 有实质更新（`host-plugin.md` 5300 → 6883 字节）：
+  - 新增「Persist your own configuration」整节——插件**不得**读写 profile 的
+    `cordis.patch.yml`，须经 `configEditor`（`ctx.fiber.entry` +
+    `ctx.get('configEditor').edit()`）改自身配置；密钥存 `ctx.credentials`；
+  - display checklist 新增**英文标题 sentence case** 要求（如 `Git worktrees`）；
+  - 模板目录 `locale` 由单文件改为目录形式。
+- cordis 升 **4.0.5 → 4.1.0**。
+
+### 变更
+
+- **声明对齐 rc.1**：`engines.dsh` 升 `^0.2.2-rc.1`；peers/devDeps 的
+  `dsh-agent-preset-registry`、`dsh-llm` 升 `^0.2.2-rc.1`；cordis 升 `^4.1.0`。
+- **规范符合性核对**：
+  - display metadata：英文标题 `Fresh Start` 已是 sentence case；双语 locale、
+    顶层 `icon` 与 `./icon` 导出、`files` 覆盖均符合；
+  - 「Persist your own configuration」：本插件不读写 profile 配置、不声明 `Config`、
+    无持久化需求，天然符合；
+  - 包形态：`dsh.bundle.patch` + `dsh.client.platform` + `exports["./client"]` 未变。
+- **完整链路复核（rc.1 实测全部未变）**：`unmetRequirements` 门禁（`engines.dsh`
+  优先）、`iconOf` 双路径、locale 子路径解析、client 扫描条件、`agentPresets`
+  （服务名 + resolve/mount/serviceFor）、`agents.create(options)`、
+  `workspaceRegistry` 三件套、`compactNow(agent, signal, commandId)`、
+  `commands.register`、`requestHeader/deriveMessages`、seed 四类事件词表、
+  `BlockAssembler/createUserMessage`。
+- **真机端到端验证**（隔离 profile）：npm 安装 1.7.2 → 门禁 0 跳过 → entry 进组合树
+  → `[fresh-start] installed: /fresh command registered` → client 组合脚本 200
+  （2.5 MB）→ `readPluginMeta` 双语元数据 + icon 无 error。
+- 66 断言（57+9）ALL PASS。
+
 ## 1.7.2 - 2026-10-24
 
 适配 dsh `0.2.1-rc.3`。rc.3 发布说明仅 UI 改进（侧栏「更多」菜单）与草稿修复，

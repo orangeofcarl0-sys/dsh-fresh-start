@@ -1,7 +1,7 @@
 # dsh-fresh-start
 
 [![Version](https://img.shields.io/badge/version-1.3.5-blue)]()
-[![dsh](https://img.shields.io/badge/dsh-0.2.1--rc.3-green)]()
+[![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.1-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 DSH（DeepSeek Harness）`/fresh` 命令：**一键总结当前对话 → 开启新对话（自动跳转）→ 归档老对话**。
@@ -125,21 +125,21 @@ dsh-fresh-start/
 
 ### dsh 版本
 
-以 `0.2.1-rc.3` 为准（2026-10-24 适配，1.7.2）。插件依赖 dsh 内部 API
+以 `0.2.2-rc.1` 为准（2026-11-06 适配，1.8.0）。插件依赖 dsh 内部 API
 （`ctx.agents.create` / `ctx.workspaceRegistry` / `ctx.sessions.open` /
 `session.deriveMessages()` 等），dsh 升级可能导致兼容性问题。
 
-**0.2.0-rc.2 → 0.2.1-rc.3：插件代码零改动**。rc.1 引入 `engines.dsh` 与 `./icon` 规范，rc.2/rc.3 沿袭（官方 skill 文件字节相同）。
+**0.2.0-rc.2 → 0.2.2-rc.1：插件代码零改动**。0.2.1-rc.1 引入 `engines.dsh` 与 `./icon` 规范；0.2.2-rc.1 新增配置持久化约束（configEditor）与 sentence case 要求，本插件均符合。
 
 - **兼容性声明改用 `engines.dsh`（0.2.1 首选）**：0.2.1 的 `unmetRequirements`
   规定——插件若声明了自己的 `engines.dsh`，该范围**单独决定**兼容性，
   `peerDependencies` 被完全忽略；未声明时才逐项比对 `@deepseek-ai/dsh*` peers。
-  本插件声明 `dsh: "^0.2.1-rc.3"`，语义更明确（peer 保留供包管理器解析）。
+  本插件声明 `dsh: "^0.2.2-rc.1"`，语义更明确（peer 保留供包管理器解析）。
 - **`exports` 新增 `./icon`**：0.2.1 的 display checklist 要求导出
   `./locale/*.json` 与 `./icon`；宿主 `iconOf` 优先读顶层 `icon`、缺失时回退
   `./icon` 导出，现两条路径都指向 `./icon.svg`。
-- **依赖线**：peers/devDeps 升 `dsh-llm@^0.2.1-rc.3`、
-  `dsh-agent-preset-registry@^0.2.1-rc.3`、cordis `^4.0.5`。
+- **依赖线**：peers/devDeps 升 `dsh-llm@^0.2.2-rc.1`、
+  `dsh-agent-preset-registry@^0.2.2-rc.1`、cordis `^4.1.0`。
 - **API 面 0.2.1 全绿**：`agentPresets`（服务名与 `resolve/mount/serviceFor` 不变）、
   `agents.create(options)`、`workspaceRegistry` 三件套、
   `compaction.compactNow(agent, signal, commandId)`、`commands.register`、
@@ -218,11 +218,11 @@ dsh-fresh-start/
 ## 开发与测试
 
 ```sh
-npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.2.1-rc.3 + cordis 4.0.5，来自 npm）
+npm install   # 安装 devDependencies（@deepseek-ai/dsh-llm 0.2.2-rc.1 + cordis 4.1.0，来自 npm）
 npm test
 ```
 
-测试在 `@deepseek-ai/*` 依赖 `0.2.1-rc.3` 下运行（依赖图不含 agent-presets，
+测试在 `@deepseek-ai/*` 依赖 `0.2.2-rc.1` 下运行（依赖图不含 agent-presets，
 无需额外补装）：
 
 - `tests/smoke_test.mjs`（57 断言）：命令注册 / 全流程 / 总结失败降级 / 新会话失败仍归档 /
