@@ -15,6 +15,7 @@ const factory = factories.get('dsh-fresh-start')
 check('registered id dsh-fresh-start', factory !== void 0)
 const plugin = factory(() => { throw new Error('require not used') })
 check('factory returns apply+inject', typeof plugin.apply === 'function' && Array.isArray(plugin.inject))
+check('inject includes uiWorkspace', plugin.inject.includes('uiWorkspace'))
 
 // 极简 snapshot store（subscribe/getSnapshot）
 function makeStore(initial) {
@@ -29,13 +30,19 @@ function makeStore(initial) {
 
 function makeCtx(initialWorkspace = {}, initialSessions = {}) {
   const opened = []
+  let refreshCalls = 0
   const workspaces = makeStore({ archivedSessionIds: [], ...initialWorkspace })
   const sessions = makeStore({ ids: [], byId: {}, current: void 0, ...initialSessions })
   const ctx = {
     workspaces: { list: workspaces },
-    sessions: { list: sessions, open: (id) => { opened.push(id) } },
+    sessions: {
+      list: sessions,
+      refresh: async () => { refreshCalls++ },
+    },
+    // dsh 0.2.2：view selection 走 uiWorkspace.openSession
+    uiWorkspace: { openSession: (id) => { opened.push(id) } },
   }
-  return { ctx, opened, workspaces, sessions }
+  return { ctx, opened, workspaces, sessions, refreshCalls: () => refreshCalls }
 }
 
 // 用例 1：归档老会话 → 跳转到 parentId 匹配的新会话
@@ -55,13 +62,14 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
 
 // 用例 2：归档时新会话尚未同步 → pending 兜底补跳
 {
-  const { ctx, opened, workspaces, sessions } = makeCtx(
+  const { ctx, opened, workspaces, sessions, refreshCalls } = makeCtx(
     { archivedSessionIds: [] },
     { ids: [], byId: {}, current: void 0 },
   )
   const dispose = plugin.apply(ctx)
   workspaces._set({ archivedSessionIds: ['old-a'] })
   check('not open yet (child missing)', opened.length === 0)
+  check('pending archive requests a session-list refresh', refreshCalls() === 1)
   sessions._set({ ids: ['old-a', 'new-a'], byId: { 'old-a': { id: 'old-a' }, 'new-a': { id: 'new-a', parentId: 'old-a' } } })
   check('pending sweep opens child', opened.includes('new-a'), `opened=${JSON.stringify(opened)}`)
   dispose()
@@ -86,7 +94,7 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
     { ids: [], byId: {} },
   )
   let openThrew = false
-  ctx.sessions.open = () => { openThrew = true; throw new Error('boom') }
+  ctx.uiWorkspace.openSession = () => { openThrew = true; throw new Error('boom') }
   const dispose = plugin.apply(ctx)
   workspaces._set({ archivedSessionIds: ['old-z'] })
   sessions._set({ ids: ['new-z'], byId: { 'new-z': { id: 'new-z', parentId: 'old-z' } } })
@@ -101,12 +109,28 @@ function makeCtx(initialWorkspace = {}, initialSessions = {}) {
     { ids: [], byId: {} },
   )
   let openCalls = 0
-  ctx.sessions.open = () => { openCalls++; throw new Error('boom') }
+  ctx.uiWorkspace.openSession = () => { openCalls++; throw new Error('boom') }
   const dispose = plugin.apply(ctx)
   workspaces._set({ archivedSessionIds: ['old-q'] })
   sessions._set({ ids: ['new-q'], byId: { 'new-q': { id: 'new-q', parentId: 'old-q' } } })
   sessions._set({ ids: ['new-q', 'extra'], byId: { 'new-q': { id: 'new-q', parentId: 'old-q' }, extra: { id: 'extra' } } })
   check('open failure not retried endlessly', openCalls === 1, `openCalls=${openCalls}`)
+  dispose()
+}
+
+// 用例 6：旧宿主没有 uiWorkspace → 回退 sessions.open
+{
+  const { ctx, opened, workspaces, sessions } = makeCtx(
+    { archivedSessionIds: [] },
+    { ids: [], byId: {}, current: void 0 },
+  )
+  delete ctx.uiWorkspace
+  ctx.sessions.open = (id) => { opened.push(id) }
+  const dispose = plugin.apply(ctx)
+  workspaces._set({ archivedSessionIds: ['old-l'] })
+  check('legacy host: no jump before child sync', opened.length === 0)
+  sessions._set({ ids: ['new-l'], byId: { 'new-l': { id: 'new-l', parentId: 'old-l' } } })
+  check('legacy sessions.open fallback works', opened.includes('new-l'), `opened=${JSON.stringify(opened)}`)
   dispose()
 }
 

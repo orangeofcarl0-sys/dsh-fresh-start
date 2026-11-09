@@ -7,17 +7,43 @@
 - 日期格式：`YYYY-MM-DD`
 - 兼容基线、门禁规则与升级检查清单见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 
-## [Unreleased]
+## [1.8.1] - 2026-11-09
+
+修复 issue #1 及真机实测发现的关联问题：总结失败仍归档、Compact-First 读不到全局压缩服务、`/fresh <preset>` 参数被客户端丢弃、seed 会话重启后历史加载失败、归档后自动跳转失效。
+
+### 修复
+
+- **归档安全**：`/fresh` 现在只有在摘要成功且新会话创建成功后才归档旧会话。
+  - 总结失败：返回 `kind: "error"`，不创建、不归档，文本含 `summarization failed (…); old session kept (not archived)`。
+  - 空上下文：返回 `kind: "error"`，不创建、不归档（`nothing to summarize (empty context); no new session created`）。
+  - 新会话创建失败：返回 `kind: "error"`，不归档（`new session FAILED (…); old session kept (not archived)`）。
+  - 归档失败仍返回 `success`（新会话已创建），文本记录失败原因。
+- **Compact-First 服务读取**：不再直接访问未注入的 `ctx.compaction`。cordis 对未声明 `inject` 的服务属性会抛 `cannot get property "compaction" without inject`，导致 `??` 后面的 `serviceFor` 兜底永远不执行。改用 `ctx.get('compaction')` 读取全局服务；读取失败或缺失时回退 `agentPresets.serviceFor(agent, 'compaction')`。
+- **`/fresh <preset>` 参数**：命令注册新增 `input: { hint: 'preset (optional)' }`。dsh 客户端只对声明了 `input` 的命令保留参数；未声明时菜单选择会丢弃参数并直接执行裸 `/fresh`（issue 中 `args: ""`、目标 preset 被继承的现象）。
+- **seed 事件补齐（0.2.2 真机实测）**：
+  - `assistant/message` 增加 `stream: []`，满足 `assertAssistantSettlementShape`，否则新会话创建失败。
+  - 新增 `request/header` 与 `request/context`，并继承旧会话真实的 provider/model 与 `contextWindow`/`systemPromptUpdate`；缺失时重启后会出现「历史加载失败：Maximum call stack size exceeded」或卡在「载入历史」，同时新会话模型选择丢失。
+  - 旧会话日志缺少 `request/context` 时拒绝创建新会话（`session log lacks request/context; old session kept`），避免制造无法重新加载的 seed 会话。
+- **client 跳转 API**：dsh 0.2.2 的 view selection 改为 `ctx.uiWorkspace.openSession(id)`，旧 `ctx.sessions.open` 已不存在。client 改为优先 `uiWorkspace`，保留旧宿主 `sessions.open` 回退。
+- **连续跳转兜底**：归档时若新会话尚未进入列表，除 pending 外再主动调用 `ctx.sessions.refresh()` 后重扫，避免只依赖会话列表推送而错过跳转。
+
+### 测试
+
+- 新增回归用例：总结失败不归档、创建失败不归档、空上下文不动作、旧会话缺 `request/context` 时拒绝创建、`ctx.get` 读取全局压缩、`ctx.get` 失败时 `serviceFor` 兜底、命令声明 `input`、参数首尾空白裁剪、seed 的 `request/header`/`request/context` 继承、`uiWorkspace.openSession` 与旧宿主回退、归档后主动 refresh。
+- 新增 `tests/cordis_test.mjs`：用真实 cordis 验证未 inject 的 `ctx.compaction` 会抛错、`ctx.get('compaction')` 可读取全局引擎、插件激活与 `/fresh` 全流程。
+- smoke 69 + client 13 + cordis 6 = **88 断言**，ALL PASS。
+- 真机（隔离 DSH_HOME + dsh 0.2.2-rc.1）实测：连续两次 `/fresh` 创建+归档+自动跳转成功；`/fresh minimal` 新会话 `agentPreset` 为 `minimal`；重启后 seed 会话历史正常加载、模型继承正确；故障注入总结失败时旧会话保留且无新会话。
 
 ### 文档
 
+- README、ARCHITECTURE、COMPATIBILITY、COMPACT_FIRST_SPEC 同步归档安全、Compact-First 服务读取、seed 事件模型与 client 跳转方式。
+- COMPATIBILITY 的 0.2.2 节补充 1.8.1 真机实测差异，避免沿用 1.8.0「host API 全未变」的不完整结论。
 - 全面重构项目文档：
   - `README.md` 重写为入口指南（安装、使用、流程、设计要点、兼容性、排障、开发、发布、局限）；
   - 新增 `docs/ARCHITECTURE.md`，记录 host/client 调用链、seed 事件模型、跨端握手与设计决策；
   - 新增 `docs/COMPATIBILITY.md`，记录版本矩阵、宿主门禁规则、升级 SOP、排障手册与历史验证结论；
   - `docs/COMPACT_FIRST_SPEC.md` 从「待实现」更新为 as-built（全局 compaction 优先、`serviceFor` 兜底、接口返回字符串）；
   - `CHANGELOG.md` 统一为 Keep a Changelog 结构，保留全部版本事实。
-- 代码、依赖声明与发布物零改动。
 
 ## [1.8.0] - 2026-11-06
 

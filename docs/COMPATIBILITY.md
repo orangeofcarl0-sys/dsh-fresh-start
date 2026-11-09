@@ -1,6 +1,6 @@
 # 兼容性与升级指南
 
-> 适用版本：dsh-fresh-start `1.8.0`。
+> 适用版本：dsh-fresh-start `1.8.1`。
 > 当前基线：dsh `0.2.2-rc.1`（0.2.x 线，含后续预发布）。
 > 实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)；用户安装与使用见 [README](../README.md)。
 
@@ -18,7 +18,7 @@
 ## 1. 兼容性策略
 
 - **版本号**：遵循 Semantic Versioning。兼容性适配轮升 minor 或 patch；破坏性变更升 major。
-- **每轮验证**：dsh 每个发布线（含 rc）做一次完整适配轮——核对官方插件规范、逐项验证宿主机制链、在隔离 profile 中做端到端测试，然后升级声明。
+- **每轮验证**：dsh 每个发布线（含 rc）做一次完整适配轮——核对官方插件规范、逐项验证宿主机制链、在隔离 profile 中启动并实际执行 `/fresh` 的成功/失败/重启恢复路径，然后升级声明。
 - **支持范围**：当前插件只承诺与 `engines.dsh` 声明的范围兼容（`0.2.x` 线）。更早的 `0.1.x` 宿主线不再由最新版插件支持；需要旧宿主时使用对应历史版本（见 §2）。
 - **dsh 本身处于预发布阶段**：宿主 API 可能在任何 rc 中变化，因此插件每次适配都会重新核对实际安装树，而不是只改版本号。
 
@@ -26,6 +26,7 @@
 
 | 插件版本 | 日期 | dsh 基线 | 性质 |
 |---|---|---|---|
+| 1.8.1 | 2026-11-09 | 0.2.2-rc.1 | 修复 issue #1：总结失败不再归档；Compact-First 改用 `ctx.get`；命令声明 `input`；seed 补 `stream`/`request/header`/`request/context`；client 改用 `uiWorkspace.openSession` |
 | 1.8.0 | 2026-11-06 | 0.2.2-rc.1 | 规范更新适配（配置持久化、sentence case、cordis 4.1.0）；代码零改动 |
 | 1.7.2 | 2026-10-24 | 0.2.1-rc.3 | 链路复核；规范与 rc.2 字节相同；代码零改动 |
 | 1.7.1 | 2026-10-17 | 0.2.1-rc.2 | 链路复核；发现 pnpm 新版本冷却；代码零改动 |
@@ -118,7 +119,8 @@ peer 的作用是让包管理器解析运行时依赖；门禁只看 `engines.ds
 | `ctx.agentPresets.resolve(id)` | `dsh-agent-preset-registry` | 校验 preset、取规范 id |
 | `ctx.agentPresets.mount(agentCtx, id)` | `dsh-agent-preset-registry` | 新会话挂载 preset |
 | `ctx.agentPresets.serviceFor(agent, 'compaction')` | `dsh-agent-preset-registry` | 压缩引擎兜底 |
-| `ctx.compaction.compactNow(agent, signal, commandId)` | `dsh-compaction-basic` | Compact-First |
+| `ctx.get('compaction')` | cordis + `dsh-compaction-basic` | 可选读取全局压缩服务 |
+| `globalEngine.compactNow(agent, signal, commandId)` | `dsh-compaction-basic` | Compact-First |
 | `ctx.agents.create(options)` | `dsh-agent` | 创建 seeded 会话 |
 | `ctx.workspaceRegistry.archiveSession(id)` | `dsh-workspace` | 归档老会话 |
 | `ctx.workspaceRegistry.resolveByPath(cwd)` | `dsh-workspace` | 解析 workspace |
@@ -127,7 +129,7 @@ peer 的作用是让包管理器解析运行时依赖；门禁只看 `engines.ds
 | `session.deriveMessages()` | `dsh-session` | 取上传上下文 |
 | `ctx.llm.stream(options)` | `dsh-llm` | 总结请求 |
 | `BlockAssembler` / `createUserMessage` | `dsh-llm` | 聚合流、构造消息 |
-| `ctx.workspaces.list` / `ctx.sessions.list` / `ctx.sessions.open` | dsh Web client runtime | 归档监听与跳转 |
+| `ctx.workspaces.list` / `ctx.sessions.list` / `ctx.uiWorkspace.openSession` | dsh Web client runtime | 归档监听与跳转 |
 
 ### 4.2 包形态契约
 
@@ -156,7 +158,7 @@ peer 的作用是让包管理器解析运行时依赖；门禁只看 `engines.ds
 lib/  cordis.patch.yml  locale/*.json  icon.svg  README.md  LICENSE  CHANGELOG.md
 ```
 
-`npm pack --dry-run` 当前实测为 10 个文件、约 27 kB 压缩包 / 70 kB 解压后（1.8.0 发布时为 27.7 kB / 75.0 kB）。`tests/`、`docs/`、`node_modules/` 不会进入安装包。
+`npm pack --dry-run` 当前实测为 10 个文件、约 31 kB 压缩包 / 83 kB 解压后（1.8.0 发布时为 27.7 kB / 75.0 kB）。`tests/`、`docs/`、`node_modules/` 不会进入安装包。
 
 ## 5. 安装与发布机制
 
@@ -167,7 +169,7 @@ dsh 0.2.1 起，`dsh plugin add <pkg>` 受 pnpm `minimumReleaseAge` 约束，默
 处理方式：使用精确版本。
 
 ```sh
-dsh plugin --profile web add dsh-fresh-start@1.8.0
+dsh plugin --profile web add dsh-fresh-start@1.8.1
 ```
 
 插件管理器会把该版本写入 profile 的 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`。这是预期行为，不是插件缺陷。
@@ -216,11 +218,13 @@ dsh 0.2.0 起，`dsh plugin add` 会自动把包加入 profile 的 `dsh.profile.
    - `dsh --dump-config` 确认零跳过、entry 进组合树；
    - 启动 web profile，确认 `[fresh-start] installed: /fresh command registered`；
    - 请求 client 组合脚本，确认 200 且内容含 `__ModuleLoader__`；
-   - 调用宿主 `readPluginMeta`，确认双语标题、描述与 icon 均正确。
+   - 调用宿主 `readPluginMeta`，确认双语标题、描述与 icon 均正确；
+   - **实际执行 `/fresh`**：成功路径（创建 + 归档 + 自动跳转）、总结失败路径（旧会话保留、不归档）、服务重启后 seed 会话历史加载；
+   - `/fresh <preset>` 的 `command/run.args` 非空，新会话 header 的 `agentPreset` 为目标值。
 
 7. **升级与回归**
    - 更新 `engines.dsh`、peer/devDeps、cordis 范围；
-   - `npm install` 后运行 `npm test`（66 条断言）；
+   - `npm install` 后运行 `npm test`（88 条断言）；
    - 更新 README 徽章与兼容性章节、CHANGELOG；
    - 提交；只有收到明确推送指令后才 push / publish；
    - 本机用精确版本重新安装，重启 `dsh web` 验证。
@@ -233,8 +237,11 @@ dsh 0.2.0 起，`dsh plugin add` 会自动把包加入 profile 的 `dsh.profile.
 | `pending (waiting for services: agentPresets, workspaceRegistry)` | profile 缺少 `@deepseek-ai/dsh-web-app` | 确认 `dsh.profile.bundles` 含 `@deepseek-ai/dsh-web-app`；用完整 default profile 初始化 |
 | `/plugins/dsh-fresh-start/client.js` 404 | 0.2.0 起 client 走组合脚本 | 检查 `plugins/??…,dsh-fresh-start/client.js,…&rev=<hash>` |
 | `dsh plugin add` 装到旧版本 | pnpm `minimumReleaseAge` 冷却 | 用精确版本 `dsh-fresh-start@x.y.z` |
-| `/fresh` 有新会话但无摘要 | 总结失败：provider/model 缺失、上下文超限、模型无文本 | 看返回文本的 `summarization failed (…)`；检查会话模型与上下文大小 |
-| 新会话已创建但未自动跳转 | client 未加载，或会话列表尚未同步 | 确认 Plugins 页 client 已启用；等待列表刷新或手动打开 |
+| `/fresh` 创建了新会话但没有摘要（≤1.8.0） | 总结失败：provider/model 缺失、上下文超限、模型无文本 | 1.8.1 起不会创建新会话；看返回文本的 `summarization failed (…)`，旧会话保持可打开 |
+| `/fresh <preset>` 参数被忽略 | 旧版命令未声明 `input`，客户端菜单选择丢弃参数 | 升级到 1.8.1+；确认 `command/run` 的 `args` 非空 |
+| 新会话已创建但未自动跳转 | client 未加载；或 client 仍调用旧 `sessions.open`（0.2.2 已改为 `uiWorkspace.openSession`）；或会话列表尚未同步 | 升级到 1.8.1+；确认 Plugins 页 client 已启用；等待列表刷新或手动打开 |
+| seed 会话重启后「历史加载失败」或停在「载入历史」 | seed 缺 `request/header` / `request/context`，或 `assistant/message` 缺 `stream` | 升级到 1.8.1+；该版本补齐三类事件 |
+| `/fresh` 报 `session log lacks request/context` | 旧会话日志没有模型路由元数据（极旧 seed 会话） | 旧会话保留；在新会话中重新执行 `/fresh`，或先正常发起一轮请求 |
 | 出现两个 `/fresh` | 手工 patch 与 bundle 安装重复 | 删除 profile `cordis.patch.yml` 中的手工挂载行 |
 | `npm publish` 403 | 2FA 限制 | 使用 bypass-2FA token 或 OTP |
 | 安装后仍解析旧版本 | registry 可见性延迟 | 等 `npm view dsh-fresh-start version` 返回新版本 |
@@ -242,7 +249,7 @@ dsh 0.2.0 起，`dsh plugin add` 会自动把包加入 profile 的 `dsh.profile.
 
 ## 8. 历史验证结论
 
-### 8.1 dsh 0.2.2-rc.1（插件 1.8.0）
+### 8.1 dsh 0.2.2-rc.1（插件 1.8.0–1.8.1）
 
 - 发布说明中的插件相关变化：插件管理支持更新第三方插件包、热更新失败自动恢复旧版本、插件管理页富文本详情、会话列表支持插件图标。
 - 官方规范 `cordis-plugin-development` 实质性更新：`host-plugin.md` 5300 → 6883 字节。
@@ -250,8 +257,17 @@ dsh 0.2.0 起，`dsh plugin add` 会自动把包加入 profile 的 `dsh.profile.
   - display checklist 新增英文标题 sentence case 要求。
   - 模板中的 `locale` 由单文件改为目录形式。
 - cordis 4.0.5 → 4.1.0。
-- 四条机制链（门禁、icon、locale、client 扫描）与全部运行时 API 未变。
-- 隔离 profile 端到端验证通过；本插件不读写 profile 配置、不声明 `Config`，天然符合新规范。
+- host 侧四条机制链（门禁、icon、locale、client 扫描）与 host 运行时 API 未变。
+- **1.8.1 真机实测确认的 0.2.2 差异**：
+  - client 的 `ctx.sessions.open` 已移除，view selection 改为 `ctx.uiWorkspace.openSession`；旧 client 调用会抛错并被当作确定性失败，表现为归档后不跳转。
+  - seed 的 `assistant/message` 必须带 `stream` 数组；否则新会话创建失败（`invalid settlement fields`）。
+  - seed 必须带 `request/header` 与 `request/context`，并继承真实 provider/model/`contextWindow`/`systemPromptUpdate`；否则重启后出现「历史加载失败：Maximum call stack size exceeded」或卡在「载入历史」，同时新会话显示「请选择模型」。
+- **1.8.1 真机验证**（隔离 `DSH_HOME` + 独立 profile）：
+  - 连续两次 `/fresh`：创建、归档、自动跳转均成功；
+  - `/fresh minimal`：新会话原始 header 中 `agentPreset: "minimal"`，参数未被客户端丢弃；
+  - 服务重启后：新标签页正常加载 seed 会话历史，模型继承正确；
+  - 故障注入总结失败：`summarization failed (...); old session kept (not archived)`，无新会话、旧会话仍可打开。
+- 本插件不读写 profile 配置、不声明 `Config`，符合「Persist your own configuration」规范。
 
 ### 8.2 dsh 0.2.1 线（插件 1.7.0–1.7.2）
 

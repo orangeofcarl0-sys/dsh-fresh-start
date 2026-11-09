@@ -23,6 +23,7 @@ function makeStream(text, { fail = false } = {}) {
 function makeCtx({
   summaryText = 'SUMMARY CONTENT', summaryFail = false, hasMessages = true,
   hasWorkspaces = true, createError = null, compactEngine = null,
+  globalCompaction = null, compactionGetterThrows = false, getThrows = false,
 } = {}) {
   const recorded = { registered: [], created: [], archived: [], llmOptions: [], resolveByPath: [], attached: [] }
   const ctx = {
@@ -44,6 +45,12 @@ function makeCtx({
     commands: {
       register: (def) => { recorded.registered.push(def); return () => {} },
     },
+    // 模拟 cordis 的 ctx.get：无 inject 读取服务；未提供时为 undefined。
+    // getThrows 模拟某些宿主上读取本身失败。
+    get: (name) => {
+      if (getThrows) throw new Error('cannot read service without inject')
+      return name === 'compaction' ? globalCompaction : undefined
+    },
     workspaceRegistry: hasWorkspaces ? {
       archiveSession: async (id) => { recorded.archived.push(id) },
       resolveByPath: async (path) => {
@@ -63,6 +70,14 @@ function makeCtx({
     },
     effect: (gen) => { const it = gen(); const step = (r) => { const { value, done } = it.next(r); if (!done) step(typeof value === 'function' ? void 0 : value) }; step() },
   }
+  // 模拟真实 cordis：直接访问未 inject 的服务属性会抛错。
+  // 新实现必须走 ctx.get('compaction')，否则这里会让用例失败。
+  if (compactionGetterThrows) {
+    Object.defineProperty(ctx, 'compaction', {
+      configurable: true,
+      get() { throw new Error('cannot get property "compaction" without inject') },
+    })
+  }
   return { ctx, recorded }
 }
 
@@ -74,7 +89,9 @@ function makeInvocation() {
       session: {
         id: 'session-old',
         header: { cwd: 'C:\\proj', agentPreset: 'code' },
-        events: [],
+        events: [
+          { type: 'request/context', seq: 0, time: 1, data: { provider: 'p', model: 'm', contextWindow: 123, systemPromptUpdate: 'in-history' } },
+        ],
         requestHeader: () => ({ config: { provider: 'p', model: 'm' }, system: 'sys', tools: [] }),
         deriveMessages: () => [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
       },
@@ -91,13 +108,22 @@ function makeInvocation() {
   plugin.apply(ctx)
   const def = recorded.registered[0]
   check('command registered name fresh', def?.name === 'fresh')
+  check('command declares input hint', def?.input?.hint === 'preset (optional)')
   const result = await def.handler(makeInvocation())
   check('full flow success', result.kind === 'success', `kind=${result.kind}`)
   check('llm.stream called', recorded.llmOptions.length === 1)
   check('llm messages include instruction', recorded.llmOptions[0].messages.at(-1).content[0].text.includes('Summarize'))
-  check('new session seeded with summary', recorded.created.length === 1 && recorded.created[0].seed?.[6]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
-  check('seed has full turn (non-blank)', recorded.created[0].seed?.[3]?.type === 'turn/start' && recorded.created[0].seed?.[8]?.type === 'turn/end')
-  check('seed assistant message has surfaceOp append', recorded.created[0].seed?.[6]?.surfaceOp === 'append')
+  check('new session seeded with summary', recorded.created.length === 1 && recorded.created[0].seed?.[8]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
+  check('seed has full turn (non-blank)', recorded.created[0].seed?.[3]?.type === 'turn/start' && recorded.created[0].seed?.[10]?.type === 'turn/end')
+  check('seed assistant message has surfaceOp append', recorded.created[0].seed?.[8]?.surfaceOp === 'append')
+  check('seed request header inherits route',
+    recorded.created[0].seed?.[6]?.type === 'request/header'
+    && recorded.created[0].seed?.[6]?.data?.header?.config?.provider === 'p'
+    && recorded.created[0].seed?.[6]?.data?.header?.config?.model === 'm')
+  check('seed request context inherits model metadata',
+    recorded.created[0].seed?.[7]?.type === 'request/context'
+    && recorded.created[0].seed?.[7]?.data?.contextWindow === 123
+    && recorded.created[0].seed?.[7]?.data?.systemPromptUpdate === 'in-history')
   check('seed prefixed with permission knobs', recorded.created[0].seed?.[0]?.type === 'permission/preset' && recorded.created[0].seed?.[1]?.type === 'sandbox/mode' && recorded.created[0].seed?.[2]?.type === 'approval/policy')
   check('seed knobs carry concrete values', recorded.created[0].seed?.[0]?.data?.preset === 'workspace-write' && recorded.created[0].seed?.[1]?.data?.mode === 'workspace-write' && recorded.created[0].seed?.[2]?.data?.policy === 'ask')
   check('new session cwd+preset', recorded.created[0].meta.cwd === 'C:\\proj' && recorded.created[0].meta.agentPreset === 'code')
@@ -115,15 +141,16 @@ function makeInvocation() {
   const inv = makeInvocation()
   inv.agent.session.header.agentPreset = 'code'
   inv.agent.session.events = [
-    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-    { type: 'agent-preset/selected', seq: 1, time: 2, data: { agentPreset: 'standard' } },
+    { type: 'request/context', seq: 0, time: 1, data: { provider: 'p', model: 'm', contextWindow: 123 } },
+    { type: 'turn/start', seq: 1, time: 2, data: { turn: 1 } },
+    { type: 'agent-preset/selected', seq: 2, time: 3, data: { agentPreset: 'standard' } },
   ]
   const result = await def.handler(inv)
   check('preset event overrides header', result?.kind === 'success' && recorded.created[0]?.meta?.agentPreset === 'standard',
     `kind=${result?.kind} agentPreset=${JSON.stringify(recorded.created[0]?.meta?.agentPreset)}`)
 }
 
-// 用例 2：空上下文（无消息）→ 无摘要，新会话无 seed
+// 用例 2：空上下文（无消息）→ 无摘要，不创建会话、不归档
 {
   const { ctx, recorded } = makeCtx({})
   plugin.apply(ctx)
@@ -131,31 +158,47 @@ function makeInvocation() {
   const inv = makeInvocation()
   inv.agent.session.deriveMessages = () => []
   const result = await def.handler(inv)
-  check('empty context: success', result.kind === 'success')
-  check('empty context: new session no seed', recorded.created[0] && recorded.created[0].seed === void 0)
-  check('empty context: archive happened', recorded.archived.includes('session-old'))
+  check('empty context: error (nothing done)', result.kind === 'error', `kind=${result.kind}`)
+  check('empty context: reason reported', result.text.includes('nothing to summarize'))
+  check('empty context: no session created', recorded.created.length === 0)
+  check('empty context: no archive', recorded.archived.length === 0)
 }
 
-// 用例 3：总结失败 → 新会话无 seed + 归档
+// 用例 2b：旧会话日志缺 request/context → 不创建可能无法恢复的 seed 会话
+{
+  const { ctx, recorded } = makeCtx({})
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.agent.session.events = []
+  const result = await def.handler(inv)
+  check('missing request/context: error', result.kind === 'error', `kind=${result.kind}`)
+  check('missing request/context: no session created', recorded.created.length === 0)
+  check('missing request/context: old session kept', recorded.archived.length === 0 && result.text.includes('lacks request/context'))
+}
+
+// 用例 3：总结失败 → 不创建、不归档，旧会话保留
 {
   const { ctx, recorded } = makeCtx({ summaryFail: true })
   plugin.apply(ctx)
   const def = recorded.registered[0]
   const result = await def.handler(makeInvocation())
-  check('summary fail: still success', result.kind === 'success')
+  check('summary fail: error', result.kind === 'error')
   check('summary fail: reported', result.text.includes('summarization failed'))
-  check('summary fail: new session no seed', recorded.created[0] && recorded.created[0].seed === void 0)
-  check('summary fail: archive happened', recorded.archived.includes('session-old'))
+  check('summary fail: no new session', recorded.created.length === 0)
+  check('summary fail: old session kept (not archived)',
+    recorded.archived.length === 0 && result.text.includes('old session kept'))
 }
 
-// 用例 4：新会话创建失败 → error 但归档仍执行
+// 用例 4：新会话创建失败 → error 且不归档旧会话
 {
   const { ctx, recorded } = makeCtx({ createError: new Error('create boom') })
   plugin.apply(ctx)
   const def = recorded.registered[0]
   const result = await def.handler(makeInvocation())
   check('create failure: error', result.kind === 'error')
-  check('create failure: archive still happened', recorded.archived.includes('session-old'))
+  check('create failure: old session not archived', recorded.archived.length === 0)
+  check('create failure: kept reason reported', result.text.includes('old session kept'))
 }
 
 // 用例 5：无 workspaceRegistry → 归档跳过但成功
@@ -203,8 +246,8 @@ function makeInvocation() {
   inv.agent.options = {}
   const result = await def.handler(inv)
   check('no provider/model: summarization failed reported', result.text.includes('summarization failed'))
-  check('no provider/model: still creates and archives',
-    recorded.created.length === 1 && recorded.archived.includes('session-old'))
+  check('no provider/model: nothing created or archived',
+    recorded.created.length === 0 && recorded.archived.length === 0)
 }
 
 // 用例 9：signal 已取消 → 总结后中止，不创建不归档
@@ -292,6 +335,19 @@ function makeInvocation() {
     `agentPreset=${JSON.stringify(recB.created[0]?.meta?.agentPreset)}`)
 }
 
+// 用例 13b：参数首尾空白被裁剪（rawInput 含分隔空白）
+{
+  const { ctx, recorded } = makeCtx({ summaryText: 'SUMMARY CONTENT' })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const inv = makeInvocation()
+  inv.rawInput = '   ptc   '
+  const result = await def.handler(inv)
+  check('preset arg trims surrounding whitespace',
+    result.kind === 'success' && recorded.created[0]?.meta?.agentPreset === 'ptc',
+    `kind=${result.kind} agentPreset=${JSON.stringify(recorded.created[0]?.meta?.agentPreset)}`)
+}
+
 // 用例 14-17：Compact-First（CFS-001/CFS-003）
 // F-02：引擎可用、压缩成功 → parts 含 compacted、create 仍调用、摘要用收紧后上下文
 {
@@ -313,7 +369,7 @@ function makeInvocation() {
   check('F-02 compact ok: note in result', result.text.includes('compacted (shadowed 3 surface nodes)'),
     `text=${result.text?.slice(0, 120)}`)
   check('F-02 compact ok: new session still created', recorded.created.length === 1)
-  check('F-02 compact ok: seed still carries summary', recorded.created[0]?.seed?.[6]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
+  check('F-02 compact ok: seed still carries summary', recorded.created[0]?.seed?.[8]?.data?.message?.content?.[0]?.text?.includes('SUMMARY CONTENT'))
 }
 
 // F-03：引擎存在但无可用范围（compactNow 返回 null）
@@ -357,6 +413,33 @@ function makeInvocation() {
   check('F-05 compact ran before summarize', sawCompact === true)
   check('F-05 summarize still sent one llm request', recorded.llmOptions.length === 1)
   check('F-05 summarize messages present', Array.isArray(recorded.llmOptions[0]?.messages) && recorded.llmOptions[0].messages.length > 0)
+}
+
+// F-06：真实 cordis 下直接读未 inject 的 ctx.compaction 会抛错；
+// 新实现必须经 ctx.get('compaction') 读取全局引擎。
+{
+  const engine = { compactNow: async () => ({ shadowedSeqs: [1, 2] }) }
+  const { ctx, recorded } = makeCtx({
+    globalCompaction: engine,
+    compactionGetterThrows: true,
+  })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const result = await def.handler(makeInvocation())
+  check('F-06 global compaction via ctx.get: success', result.kind === 'success', `kind=${result.kind}`)
+  check('F-06 global compaction note', result.text.includes('compacted (shadowed 2 surface nodes)'),
+    `text=${result.text?.slice(0, 140)}`)
+}
+
+// F-07：ctx.get 读取全局服务失败时，serviceFor 兜底仍然生效
+{
+  const engine = { compactNow: async () => ({ shadowedSeqs: [1, 2, 3, 4] }) }
+  const { ctx, recorded } = makeCtx({ compactEngine: engine, getThrows: true })
+  plugin.apply(ctx)
+  const def = recorded.registered[0]
+  const result = await def.handler(makeInvocation())
+  check('F-07 serviceFor fallback when ctx.get throws',
+    result.text.includes('compacted (shadowed 4 surface nodes)'), `text=${result.text?.slice(0, 140)}`)
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAIL`)

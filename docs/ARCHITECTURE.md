@@ -1,6 +1,6 @@
 # 架构与实现
 
-> 适用版本：dsh-fresh-start `1.8.0`，dsh `0.2.2-rc.1`。
+> 适用版本：dsh-fresh-start `1.8.1`，dsh `0.2.2-rc.1`。
 > 本文描述内部实现与设计取舍；安装、使用与排障见 [README](../README.md)，版本兼容性见 [COMPATIBILITY.md](COMPATIBILITY.md)。
 
 ## 目录
@@ -47,7 +47,7 @@
 │  window.__ModuleLoader__.load({ id: 'dsh-fresh-start', … })     │
 │   ├─ workspaces.list  → archivedSessionIds 变化                 │
 │   ├─ sessions.list    → 按 parentId 查找子会话                  │
-│   └─ sessions.open    → 自动跳转                                │
+│   └─ uiWorkspace.openSession → 自动跳转                          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -62,6 +62,7 @@ export function apply(ctx) { … }
 ```
 
 - `inject` 声明依赖的五个服务；宿主在服务就绪后才会激活插件。
+- 命令注册额外声明 `input: { hint: 'preset (optional)' }`。dsh 客户端只对声明了 `input` 的命令保留 `/fresh <preset>` 后面的参数；未声明时菜单选择会丢弃参数并直接执行裸 `/fresh`。
 - `apply` 通过 `ctx.effect` 注册命令与清理逻辑：
 
   ```js
@@ -96,7 +97,7 @@ export function apply(ctx) { … }
 }
 ```
 
-`kind` 只取决于**新会话是否创建成功**（`newId !== null`），不取决于归档是否成功。这样用户至少能拿到一个可用的新会话入口。
+`kind` 在创建成功并走到最后时为 `success`；总结或新会话创建失败会提前返回 `error`。归档失败不影响 `success`（新会话已经存在）。
 
 ### 3.3 阶段 0：读取 header 与解析参数
 
@@ -124,11 +125,12 @@ preset = sessionPresetId(session)
 `tryCompact(ctx, agent, signal, commandId)` 的解析顺序：
 
 ```js
-engine = ctx.compaction ?? ctx.agentPresets?.serviceFor?.(agent, 'compaction')
+engine = ctx.get('compaction') ?? ctx.agentPresets?.serviceFor?.(agent, 'compaction')
 ```
 
-- 优先使用 0.1.2-alpha.5 起的全局压缩服务（与内置 `/compact` 同一个 seam）；
-- 全局服务不存在时，回退到 per-preset 的 `serviceFor(agent, 'compaction')` 形态。
+- `compaction` 是可选服务，**不声明在 `inject` 中**。如果声明，没有压缩引擎的 profile 会一直停在 `pending`；因此用 `ctx.get('compaction')`（cordis 的无 inject 读取入口）按需读取。
+- 不能直接写 `ctx.compaction`：cordis 对未注入的服务属性会抛 `cannot get property "compaction" without inject`，`??` 后面的 `serviceFor` 兜底不会执行。这正是 1.8.0 在真实宿主上 Compact-First 失效的原因。
+- 全局服务不存在、无 `compactNow` 或读取失败时，回退到 per-preset 的 `serviceFor(agent, 'compaction')` 形态。
 
 判定与执行（`compactNow` 调用实际包在 `try/catch` 中，异常转为 note）：
 
@@ -146,7 +148,7 @@ const count = result.shadowedSeqs?.length
 return `compacted (shadowed ${count} surface nodes)`
 ```
 
-所有异常都被捕获为 `compaction skipped (<message>)`。函数**永不抛出**，因此压缩不是任何后续阶段的失败源。
+`compactNow` 的异常会被捕获为 `compaction skipped (<message>)`；引擎查找异常返回 `compaction engine lookup failed (<message>)`。函数**永不抛出**，因此压缩不是任何后续阶段的失败源。
 
 压缩成功后，`deriveMessages()` 因 surface `replaceGeneration` 递增而返回收紧后的消息，阶段 2 自动受益。
 
@@ -160,11 +162,7 @@ return `compacted (shadowed ${count} surface nodes)`
 4. 确定 provider/model：
 
    ```js
-   latest    = hasProviderModel(header.config) ? header.config : undefined
-   agentTarget = hasProviderModel(agent.options)
-     ? { provider: agent.options.provider, model: agent.options.model }
-     : undefined
-   target = latest ?? agentTarget
+   target = resolveRoute(header, agent)   // 最近请求路由 > agent 选项
    ```
 
    两者都不完整时抛出 `no provider/model available for summarization`；
@@ -173,9 +171,9 @@ return `compacted (shadowed ${count} surface nodes)`
    - 不传 `tools`：总结不需要工具调用，传了反而可能让模型只发起 tool call、没有文本输出；
    - `header.system` 存在时才传（dsh 0.1.5 起 canonical header 通常不含 `system`）；
 7. 用 `BlockAssembler` 聚合流式块；`finish.kind` 为 `error` / `aborted` 时抛出带 `code` 的错误；
-8. 拼接所有 `text` 块并 `trim()`；空文本抛出 `summarization produced no text`。
+8. 拼接所有 `text` 块并 `trim()`；空文本抛出 `summarization produced no text`；成功时返回 `{ text, route }`，`route` 供 seed 继承。
 
-阶段 2 的失败只影响「新会话是否带摘要」，不会阻止阶段 3 和 4。若取消信号已触发，则在总结异常分支中直接返回 `fresh-start cancelled`，不再继续。
+阶段 2 的失败是**终止性的**：总结失败或上下文为空时，`executeFresh` 直接返回 `{ kind: 'error' }`，不会创建新会话，也不会归档老会话。只有摘要成功且旧会话有 `request/context` 时才进入阶段 3。
 
 ### 3.6 阶段 3：创建 seeded 新会话
 
@@ -196,7 +194,7 @@ await ctx.agents.create({
 ```
 
 - **preset**：先 `agentPresets.resolve(preset)` 得到规范 id，再通过 `setup(agentCtx)` 调用 `agentPresets.mount(agentCtx, id)`。resolve/mount 失败时记录日志并降级为默认 preset（`resolvedPreset = undefined`，`setup` 为空函数）。
-- **seed**：`summary === null` 时完全省略 `seed` 字段，不创建空事件轮。
+- **seed**：只有摘要成功且旧会话有 `request/context` 才进入此阶段，因此实际总会生成 seed；`createSeededSession` 内部仍保留 `summary === null` 的防御分支。
 - **parentSession**：始终写入老会话 id，供 client 侧关联。
 - **agentOptions**：空对象，沿用宿主默认行为。
 
@@ -211,13 +209,15 @@ host 侧的 `agents.create` 不像 client 的 `sessions.create` RPC 那样自动
 
 ### 3.7 阶段 4：归档老会话
 
+只有阶段 3 成功创建新会话后才到达这里。
+
 ```js
 await ctx.workspaceRegistry.archiveSession(oldId)
 ```
 
 - 服务或方法不存在 → `archive skipped (workspaceRegistry service unavailable)`；
-- 抛错 → `archive FAILED (<message>)`；若新会话已创建，`kind` 仍为 `success`，否则为 `error`；
-- 归档前再次检查 `signal.aborted`：若已取消，保住老会话。新会话已创建时返回 `cancelled before archive (new session … started, old session still live)`；尚未创建时返回 `cancelled`。两种情况 `kind` 都是 `error`。
+- 抛错 → `archive FAILED (<message>)`；新会话已经存在，`kind` 仍为 `success`；
+- 归档前再次检查 `signal.aborted`：若已取消，保住老会话，返回 `cancelled before archive (new session … started, old session still live)`，`kind` 为 `error`。
 
 ### 3.8 结果拼装
 
@@ -225,16 +225,20 @@ await ctx.workspaceRegistry.archiveSession(oldId)
 
 ```text
 compacted (shadowed N surface nodes)
-summarized (N chars) | nothing to summarize (empty context) | summarization failed (…); continuing without summary
-new session session-… started (with summary) | new session FAILED (…)
+summarized (N chars)
+nothing to summarize (empty context); no new session created
+summarization failed (…); old session kept (not archived)
+cannot create seeded session (session log lacks request/context); old session kept (not archived)
+new session session-… started (with summary)
+new session FAILED (…); old session kept (not archived)
 archived <oldId> | archive skipped (…) | archive FAILED (…)
 ```
 
-最后以 `; ` 拼接，写入日志与命令返回值。
+最后以 `; ` 拼接，写入日志与命令返回值。总结/创建失败时命令提前返回，不会出现归档段。
 
 ## 4. Seed 事件模型
 
-`buildSeedEvents(summary)` 生成 9 个事件。`seq` 从 0 连续递增，`time` 从 `Date.now() - 3` 起随 `seq` 递增，确保顺序稳定且 knob 事件略早于对话轮。
+`buildSeedEvents(summary, route, routeContext)` 生成 11 个事件。`seq` 从 0 连续递增，`time` 从 `Date.now() - 3` 起随 `seq` 递增，确保顺序稳定且 knob 事件略早于对话轮。
 
 | # | `type` | 关键字段 | 存在理由 |
 |---|---|---|---|
@@ -244,15 +248,19 @@ archived <oldId> | archive skipped (…) | archive FAILED (…)
 | 3 | `turn/start` | `data.turn = 1` | 避免会话被 `sessionBlank` 判为 blank |
 | 4 | `step/start` | `{ turn: 1, step: 1 }` | 轮次结构完整 |
 | 5 | `user/message` | `content: [总结请求]`, `source.kind = 'user'`, `surfaceOp: 'append'` | 构成用户侧开场 |
-| 6 | `assistant/message` | `message.content: [摘要]`, `source = { kind: 'model', provider: 'dsh-fresh-start', model: 'summary' }`, `surfaceOp: 'append'` | 摘要作为助手回复 |
-| 7 | `step/end` | `{ turn: 1, step: 1 }` | 轮次结构完整 |
-| 8 | `turn/end` | `reason: { kind: 'completed' }` | 完成态，历史加载正常 |
+| 6 | `request/header` | `header.config = { provider, model }`, `reason: 'initial'` | 重建该轮请求；继承旧会话真实路由 |
+| 7 | `request/context` | `{ provider, model, contextWindow?, systemPromptUpdate? }` | 模型路由元数据；缺失会导致历史加载卡住 |
+| 8 | `assistant/message` | `message.content: [摘要]`, `message.source.kind = 'model'`, `stream: []`, `surfaceOp: 'append'` | 摘要作为助手回复；`stream` 是 0.2.2 seed 校验必需 |
+| 9 | `step/end` | `{ turn: 1, step: 1 }` | 轮次结构完整 |
+| 10 | `turn/end` | `reason: { kind: 'completed' }` | 完成态，历史加载正常 |
 
 不变量：
 
 - 所有 `data` 必须是 JSON 可序列化的；`session.append` 会拒绝不可序列化事件。
 - `user/message` 与 `assistant/message` 必须带 `surfaceOp: 'append'`，才会进入 surface 投影。
+- `assistant/message` 必须带 `turn`、`step` 与 `stream` 数组（0.2.2 的 `assertAssistantSettlementShape`）。
 - 必须构成完整的 `turn/start → step/start → … → step/end → turn/end`，否则历史栏会判定为空会话或渲染出「只有用户消息、没有助手回复」的异常轮次。
+- 必须带 `request/header` 与 `request/context`，且使用旧会话的真实 provider/model；缺失时 0.2.2 会报 `历史加载失败：Maximum call stack size exceeded` 或停在「载入历史」。
 
 ## 5. Client 半边
 
@@ -262,7 +270,7 @@ archived <oldId> | archive skipped (…) | archive FAILED (…)
 window.__ModuleLoader__.load({
   id: 'dsh-fresh-start',
   factory: function (require) {
-    const inject = ['sessions', 'workspaces']
+    const inject = ['sessions', 'workspaces', 'uiWorkspace']
     function apply(ctx) { … }
     return { apply, inject }
   },
@@ -282,7 +290,7 @@ const pending = new Set()
 
 两个订阅：
 
-1. **workspaces.list**：对比新旧 `archivedSessionIds`，得到新归档集合；更新 `prevArchived`；对每个新归档 id 调用 `tryOpenChild`，返回 `'missing'` 时加入 `pending`。
+1. **workspaces.list**：对比新旧 `archivedSessionIds`，得到新归档集合；更新 `prevArchived`；对每个新归档 id 调用 `tryOpenChild`，返回 `'missing'` 时加入 `pending` 并调用 `ctx.sessions.refresh()` 后再清扫。
 2. **sessions.list**：调用 `sweepPending`，对 `pending` 中的每个父 id 重试；只要返回不是 `'missing'` 就移出 pending。
 
 `tryOpenChild(parentId)` 扫描 `sessions.list` 快照：
@@ -291,7 +299,7 @@ const pending = new Set()
 for (const id of snap.ids) {
   const summary = snap.byId[id]
   if (summary?.parentId === parentId) {
-    ctx.sessions.open(id)
+    ctx.uiWorkspace.openSession(id)
     return 'opened'
   }
 }
@@ -304,11 +312,11 @@ return 'missing'
 
 | 返回值 | 含义 | 后续行为 |
 |---|---|---|
-| `'opened'` | 找到子会话并成功 `sessions.open` | 移出 pending |
-| `'missing'` | 尚未找到 `parentId` 匹配的子会话 | 保留在 pending，等会话列表更新 |
-| `'failed'` | 找到子会话但 `sessions.open` 抛错 | 告警一次，移出 pending，不再重试 |
+| `'opened'` | 找到子会话并成功打开（`uiWorkspace.openSession`，旧宿主回退 `sessions.open`） | 移出 pending |
+| `'missing'` | 尚未找到 `parentId` 匹配的子会话 | 保留在 pending，等会话列表更新或主动 refresh |
+| `'failed'` | 找到子会话但打开抛错 | 告警一次，移出 pending，不再重试 |
 
-`failed` 不重试是有意为之：`sessions.open` 的失败通常是确定性错误（会话已删除、路由异常等），每次会话列表更新都重试只会刷屏。
+`failed` 不重试是有意为之：打开会话的失败通常是确定性错误（会话已删除、路由异常等），每次会话列表更新都重试只会刷屏。
 
 ### 5.4 清理
 
@@ -327,8 +335,8 @@ host                                   client
  │                                       │  新增 old
  │                                       │
  │                                       ├─ tryOpenChild(old)
- │                                       │   找到 new → sessions.open(new)
- │                                       │   未找到 → pending.add(old)
+ │                                       │   找到 new → uiWorkspace.openSession(new)
+ │                                       │   未找到 → pending.add(old) + refresh
  │                                       │
  │                                       └─ sessions.list 更新 → sweepPending
 ```
@@ -354,16 +362,17 @@ host                                   client
 | `ctx.agentPresets.resolve(id)` | `dsh-agent-preset-registry` | 校验 preset、取规范 id | 阶段 0 报错；阶段 3 降级默认 |
 | `ctx.agentPresets.mount(agentCtx, id)` | `dsh-agent-preset-registry` | 新会话挂载 preset | 记录日志，降级默认 |
 | `ctx.agentPresets.serviceFor(agent, 'compaction')` | `dsh-agent-preset-registry` | 压缩引擎兜底 | 查找失败记录 note，跳过压缩 |
-| `ctx.compaction.compactNow(agent, signal, commandId)` | `dsh-compaction-basic` | Compact-First | 捕获为 note，不阻断 |
-| `ctx.agents.create(options)` | `dsh-agent` | 创建 seeded 会话 | 返回 `new session FAILED` |
-| `ctx.workspaceRegistry.archiveSession(id)` | `dsh-workspace` | 归档老会话 | 记录失败，不影响新会话 |
+| `ctx.get('compaction')` | cordis + `dsh-compaction-basic` | 可选读取全局压缩服务 | 读取失败/缺失时回退 `serviceFor` |
+| `globalEngine.compactNow(agent, signal, commandId)` | `dsh-compaction-basic` | Compact-First | 捕获为 note，不阻断 |
+| `ctx.agents.create(options)` | `dsh-agent` | 创建 seeded 会话 | `new session FAILED`，不归档 |
+| `ctx.workspaceRegistry.archiveSession(id)` | `dsh-workspace` | 归档老会话 | 记录失败，新会话保留 |
 | `ctx.workspaceRegistry.resolveByPath(cwd)` | `dsh-workspace` | 解析 workspace | 记录日志 |
 | `workspace.attachSession(id)` | `dsh-workspace` | 新会话归属 | 记录日志 |
 | `session.requestHeader()` | `dsh-session` | 取 `config` / `system` | 异常 → 结构化错误 |
-| `session.deriveMessages()` | `dsh-session` | 取上传上下文 | 空 → 无摘要 |
-| `ctx.llm.stream(options)` | `dsh-llm` | 总结请求 | 流错误 → 无摘要 |
-| `BlockAssembler` / `createUserMessage` | `dsh-llm` | 聚合流、构造消息 | 空文本 → 无摘要 |
-| `ctx.workspaces.list` / `ctx.sessions.list` / `ctx.sessions.open` | dsh Web client runtime | 归档监听与跳转 | 见 §5.3 |
+| `session.deriveMessages()` | `dsh-session` | 取上传上下文 | 空上下文 → 终止，不创建/归档 |
+| `ctx.llm.stream(options)` | `dsh-llm` | 总结请求 | 流错误 → 终止，不归档 |
+| `BlockAssembler` / `createUserMessage` | `dsh-llm` | 聚合流、构造消息 | 空文本 → 终止，不归档 |
+| `ctx.workspaces.list` / `ctx.sessions.list` / `ctx.uiWorkspace.openSession` | dsh Web client runtime | 归档监听与跳转 | 见 §5.3 |
 
 ## 9. 设计决策
 
@@ -373,44 +382,66 @@ host                                   client
 | Compact-First 先压缩再总结 | 直接总结全量上下文 | 超大会话下总结请求本身可能超限；压缩后请求显著变小，并复用压缩摘要 |
 | seed 写成完整对话轮 | 只写一条 `user/message` | 只写用户消息会被判为 blank，或渲染出没有助手回复的异常 turn |
 | seed 前置三个 permission knob | 让宿主回填 | 非沙箱 shell 的 `sandboxMode` 可能是 `undefined`，回填会产生不可序列化事件并导致创建失败 |
+| seed 继承旧会话的 `request/header` + `request/context` | 手写固定的 provider/model | 0.2.2 历史恢复需要真实路由元数据；继承可同时保住模型选择、`contextWindow` 与 `systemPromptUpdate` |
+| `assistant/message` 带空 `stream: []` | 省略 stream | 0.2.2 的 seed 校验要求 settlement 字段；空数组表示没有可回放的流式块 |
+| client 用 `uiWorkspace.openSession` | `ctx.sessions.open` | 0.2.2 已移除 `sessions.open`；view selection 归 `uiWorkspace`，旧宿主仍回退 |
+| 归档时 pending + `sessions.refresh()` | 只等 `sessions.list` 推送 | 归档广播与列表同步是两个通道；主动刷新避免错过一次更新 |
 | 用 `parentSession` 标记关联 | 服务端维护映射表 | 不引入额外状态，归档与创建可独立重试，client 只读会话数据即可关联 |
 | 先创建新会话、后归档老会话 | 先归档再创建 | 创建失败时老会话仍可用；避免「两个都丢」的最坏情况 |
+| 只有摘要和新会话都成功才归档 | 任何情况下都归档以释放内存 | 归档不可逆；没有摘要就归档等于永久丢弃上下文，且命令不应报告成功 |
+| 可选服务用 `ctx.get('compaction')` 读取 | 写进 `inject` / 直接读 `ctx.compaction` | 写进 inject 会让无压缩引擎的 profile 停用插件；直接读未注入属性会被 cordis 拒绝 |
+| 命令声明 `input.hint` | 不声明 input | dsh 客户端只对声明 input 的命令保留参数，否则菜单选择会丢弃 `/fresh <preset>` 的参数 |
 | host 侧显式 attach workspace | 依赖 `agents.create` 自动归属 | host API 不像 client RPC 那样自动 attach，不归属会导致侧栏找不到新会话 |
-| client 用 pending 集合兜底 | 只监听归档广播 | 归档广播与会话列表同步是两个通道，顺序不保证 |
-| `sessions.open` 失败不重试 | 每次列表更新都重试 | 确定性失败重试只会刷屏，且不会自愈 |
-| 阶段结果用字符串 note 拼接 | 结构化错误对象 | 命令返回值只需要给用户看；内部各阶段独立降级，字符串足够且便于日志排查 |
+| 打开会话失败不重试 | 每次列表更新都重试 | 确定性失败重试只会刷屏，且不会自愈 |
+| 阶段结果用字符串 note 拼接 | 结构化错误对象 | 命令返回值只需要给用户看；压缩失败降级、总结/创建失败终止，字符串足够且便于日志排查 |
 
 ## 10. 测试映射
 
-`tests/smoke_test.mjs`（57 条断言）：
+`tests/smoke_test.mjs`（69 条断言）：
 
 | 用例 | 覆盖行为 |
 |---|---|
-| 1 | 全流程：注册、总结、seed、cwd/preset、`parentSession`、归档、workspace attach、返回 `sessionId` |
+| 1 | 全流程：注册、`input` 声明、总结、seed、`request/header`/`request/context` 继承、cwd/preset、`parentSession`、归档、workspace attach、返回 `sessionId` |
 | 1b | `agent-preset/selected` 事件覆盖 header 中的 preset |
-| 2 | 空上下文：无摘要、无 seed、仍归档 |
-| 3 | 总结失败：返回 `summarization failed`、无 seed、仍归档 |
-| 4 | 创建失败：`kind = error`，仍归档 |
+| 2 | 空上下文：`error`，不创建、不归档 |
+| 2b | 旧会话缺 `request/context`：`error`，不创建、不归档 |
+| 3 | 总结失败：`error`、`summarization failed`、旧会话保留 |
+| 4 | 创建失败：`error`、旧会话不归档 |
 | 5 | 无 `workspaceRegistry`：`archive skipped`，仍成功 |
 | 6 | 不就地修改 `deriveMessages()` 返回的数组 |
 | 7 | `header.config` 缺 model 时回退到 agent options |
-| 8 | 无可用 provider/model：总结失败，但仍创建与归档 |
+| 8 | 无可用 provider/model：总结失败，不创建、不归档 |
 | 9 | 总结阶段前已取消：不创建、不归档 |
 | 10 | `session.header` 异常：结构化错误，不产生裸 rejection |
 | 11 | `/fresh standard` 覆盖继承 preset |
 | 12 | `/fresh no-such-preset` 明确报错，不创建、不归档 |
 | 13 | `ptc`、`code`、`create` 三个别名映射 |
+| 13b | 参数首尾空白被裁剪 |
 | F-02 | 压缩成功：note 含节点数，仍创建，seed 仍带摘要 |
 | F-03 | 无压缩范围：note 正确，仍创建 |
 | F-04 | 引擎抛错：不冒泡，仍创建 |
 | F-05 | 压缩先于总结执行，总结仍只发一次请求 |
+| F-06 | 未注入 `ctx.compaction` 时经 `ctx.get` 读取全局引擎 |
+| F-07 | `ctx.get` 失败时 `serviceFor` 兜底仍生效 |
 
-`tests/client_test.mjs`（9 条断言）：
+`tests/client_test.mjs`（13 条断言）：
 
 | 用例 | 覆盖行为 |
 |---|---|
 | 1 | 归档老会话后按 `parentId` 跳转；不相关归档不跳 |
-| 2 | 归档时子会话尚未同步 → pending 兜底补跳 |
+| 2 | 归档时子会话尚未同步 → pending 兜底补跳，并主动刷新会话列表 |
 | 3 | 不相关归档不触发跳转 |
-| 4 | `sessions.open` 抛错被吞掉 |
-| 5 | `sessions.open` 失败后不再无限重试 |
+| 4 | `uiWorkspace.openSession` 抛错被吞掉 |
+| 5 | 打开失败后不再无限重试 |
+| 6 | 旧宿主没有 `uiWorkspace` 时回退 `sessions.open` |
+
+`tests/cordis_test.mjs`（6 条断言，真实 cordis）：
+
+| 用例 | 覆盖行为 |
+|---|---|
+| 1 | 未 inject 时直接访问 `ctx.compaction` 抛 `without inject` |
+| 2 | 插件在真实 cordis 下激活并注册 `/fresh` |
+| 3 | 命令声明 `input.hint` |
+| 4 | `/fresh` 全流程成功 |
+| 5 | 经 `ctx.get('compaction')` 使用全局引擎并产生 `compacted` note |
+| 6 | 新会话创建、旧会话归档 |

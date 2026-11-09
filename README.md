@@ -58,7 +58,7 @@ dsh plugin --profile web update dsh-fresh-start
 > **npm 新版本冷却**：dsh 0.2.1 起，`dsh plugin add` 受 pnpm `minimumReleaseAge` 约束，默认不会选中刚发布的版本。需要立即安装某个版本时用精确版本号：
 >
 > ```sh
-> dsh plugin --profile web add dsh-fresh-start@1.8.0
+> dsh plugin --profile web add dsh-fresh-start@1.8.1
 > ```
 >
 > 插件管理器会把该版本写入 profile 的 `minimumReleaseAgeExclude`，这是预期行为。
@@ -105,7 +105,7 @@ dsh plugin --profile web update dsh-fresh-start
 compacted (shadowed 128 surface nodes); summarized (4213 chars); new session session-… started (with summary); archived session-…
 ```
 
-每一段都表示该阶段的结果。除归档（最后一步）外，某段显示 `skipped` / `failed` 时，后续阶段仍会继续执行。
+每一段都表示该阶段的结果。总结失败、旧会话缺 `request/context` 或新会话创建失败时，命令返回 `error` 且不会归档旧会话；只有摘要与新会话都成功，才会执行不可逆的归档。
 
 ## 工作原理
 
@@ -129,16 +129,17 @@ compacted (shadowed 128 surface nodes); summarized (4213 chars); new session ses
 如果当前环境提供压缩引擎，先强制压缩当前会话，让 `deriveMessages()` 收紧，后续总结请求体显著变小：
 
 ```text
-engine = ctx.compaction ?? ctx.agentPresets.serviceFor(agent, 'compaction')
+engine = ctx.get('compaction') ?? ctx.agentPresets.serviceFor(agent, 'compaction')
 result = await engine.compactNow(agent, signal, commandId)
 ```
 
+- `compaction` 是可选服务：不写进 `inject`，而是用 `ctx.get('compaction')` 读取，避免没有压缩引擎的 profile 一直 pending；也不能直接读 `ctx.compaction`，否则 cordis 会抛 `cannot get property ... without inject`，后面的 `serviceFor` 兜底不会执行。
 - 成功：返回文本记录 `compacted (shadowed N surface nodes)`；
 - 引擎不存在（如 `minimal` preset）：`no compaction engine (preset lacks the compaction service)`；
 - 没有可压缩范围：`compaction skipped (no compactable range)`；
 - agent 忙碌或引擎抛错：`compaction skipped (<原因>)`。
 
-以上任何一种情况都不会阻断后续总结、创建与归档。压缩对旧会话是**不可逆**的 shadow，但旧会话随后就会被归档。
+以上任何一种情况都不会阻断后续总结。压缩对旧会话是**不可逆**的 shadow：若后续总结与新会话创建成功，旧会话随后会被归档；若总结失败，旧会话保留（可能已处于压缩后的状态）。
 
 ### 2. 对话式总结
 
@@ -146,11 +147,11 @@ result = await engine.compactNow(agent, signal, commandId)
 - provider/model 优先取最近一次请求的 `header.config`，缺失时回退到 `agent.options`；
 - 追加一条总结指令，经 `ctx.llm.stream` 发给模型；不传 `tools`，避免模型发起工具调用导致没有文本；
 - `maxTokens: 2000`，`purpose: 'compaction'`，并透传取消信号；
-- 模型返回空文本或流失败时，总结降级为「无摘要」，但流程继续。
+- 模型返回空文本或流失败时，总结失败；命令直接返回 `error`，不创建新会话、不归档老会话，旧会话保持可打开。
 
 ### 3. 创建 seeded 新会话
 
-`ctx.agents.create` 创建新会话，继承老会话的 `cwd` 与 preset（可用 `/fresh <preset>` 覆盖），并把摘要写成一段**已完成的对话轮**：
+只有摘要成功且旧会话存在 `request/context` 时才会进入此阶段。`ctx.agents.create` 创建新会话，继承老会话的 `cwd` 与 preset（可用 `/fresh <preset>` 覆盖），并把摘要写成一段**已完成的对话轮**：
 
 | 序号 | 事件 | 作用 |
 |---|---|---|
@@ -160,21 +161,23 @@ result = await engine.compactNow(agent, signal, commandId)
 | 3 | `turn/start` | 让会话不被判定为 blank |
 | 4 | `step/start` | 轮次结构完整 |
 | 5 | `user/message` | 总结请求（`surfaceOp: append`） |
-| 6 | `assistant/message` | 摘要正文（`surfaceOp: append`） |
-| 7 | `step/end` | 轮次结构完整 |
-| 8 | `turn/end` | `reason: completed`，历史加载正常 |
+| 6 | `request/header` | 继承旧会话真实的 provider/model，历史恢复重建该轮请求 |
+| 7 | `request/context` | 继承旧会话的模型路由元数据（`contextWindow` / `systemPromptUpdate`） |
+| 8 | `assistant/message` | 摘要正文（`surfaceOp: append`，带空 `stream` 数组） |
+| 9 | `step/end` | 轮次结构完整 |
+| 10 | `turn/end` | `reason: completed`，历史加载正常 |
 
 新会话的 `meta.parentSession` 指向老会话，这是 client 侧自动跳转的关联依据。创建后还会通过 `workspaceRegistry.resolveByPath(cwd).attachSession(newId)` 把新会话归属到对应 workspace。
 
 ### 4. 归档老会话
 
-`ctx.workspaceRegistry.archiveSession(oldId)` 归档老会话，释放 live 事件树内存。归档失败只会记录在返回文本中，不会影响已经创建的新会话。
+只有新会话创建成功后才归档。`ctx.workspaceRegistry.archiveSession(oldId)` 归档老会话，释放 live 事件树内存。归档失败只会记录在返回文本中，不会影响已经创建的新会话。
 
 ### 5. 自动跳转（client 侧）
 
-client 插件监听 `archivedSessionIds` 的变化：发现老会话被归档后，在会话列表中查找 `parentId === 老会话 id` 的新会话并调用 `ctx.sessions.open(newId)`。
+client 插件监听 `archivedSessionIds` 的变化：发现老会话被归档后，在会话列表中查找 `parentId === 老会话 id` 的新会话并调用 `ctx.uiWorkspace.openSession(newId)`（0.2.2+；旧宿主回退 `ctx.sessions.open`）。
 
-归档广播与新会话列表同步是两个通道，顺序不保证。如果归档发生时新会话尚未同步，client 会把它记入 pending；等会话列表更新后再补跳。若 `sessions.open` 本身抛错，则只告警一次并放弃，不会无限重试。
+归档广播与新会话列表同步是两个通道，顺序不保证。如果归档发生时新会话尚未同步，client 会把它记入 pending，并主动刷新一次会话列表；等列表更新后再补跳。若打开会话本身抛错，则只告警一次并放弃，不会无限重试。
 
 ### 失败降级矩阵
 
@@ -183,8 +186,10 @@ client 插件监听 `archivedSessionIds` 的变化：发现老会话被归档后
 | 0 | 读取 `session.header` 异常 | 不做任何操作 | `error` |
 | 0 | `/fresh <preset>` 目标不存在 | 不做任何操作 | `error` |
 | 1 | 无引擎 / 忙碌 / 无范围 / 抛错 | 记录原因，继续总结 | 继续后续阶段 |
-| 2 | 总结失败或空文本 | 新会话不带 seed，继续创建与归档 | 继续后续阶段 |
-| 3 | 创建新会话失败 | 记录原因，仍尝试归档老会话 | `error` |
+| 2 | 总结失败或空文本 | 不创建、不归档；旧会话保留 | `error` |
+| 2 | 上下文为空 | 不创建、不归档 | `error` |
+| 3 | 创建新会话失败 | 不归档；旧会话保留 | `error` |
+| 3 | 旧会话缺 `request/context` | 不创建、不归档；旧会话保留 | `error` |
 | 4 | 归档失败 | 记录原因，新会话保留 | `success`（已创建新会话时） |
 | — | 总结后收到取消信号 | 不创建、不归档 | `error` |
 | — | 归档前收到取消信号 | 保住老会话，返回新会话 id | `error` |
@@ -192,23 +197,25 @@ client 插件监听 `archivedSessionIds` 的变化：发现老会话被归档后
 ## 设计要点
 
 - **host + client 双端**：host 负责总结、创建、归档；client 只负责归档后的自动跳转。两端通过 `parentSession` / `parentId` 关联，不需要额外服务端状态。
-- **seed 是一段完整对话轮**：只有 `turn/start` 而没有 `turn/end` / 助手消息的会话会被判为 blank 或渲染异常，因此 seed 必须构成完整的 turn。
+- **seed 是一段完整对话轮**：只有 `turn/start` 而没有 `turn/end` / 助手消息的会话会被判为 blank 或渲染异常，因此 seed 必须构成完整的 turn。0.2.2 还要求 `assistant/message` 带 `stream`，并要求 `request/header` + `request/context`；插件从旧会话继承真实路由，避免历史恢复失败和模型选择丢失。
 - **permission knob 前置**：seeded 会话若缺少 `sandbox/mode`，宿主会从 `ctx.shell.sandboxMode` 回填；非沙箱 shell 下该值可能是 `undefined`，产生不可序列化事件并导致创建失败。预置三个 knob 可跳过回填。
 - **先创建、后归档**：创建失败时老会话仍然可用；归档失败时新会话已经存在。任何单点失败都不会同时丢掉两个会话。
-- **所有阶段独立降级**：压缩、总结、创建、归档各自捕获异常，结果拼进返回文本，便于定位。
+- **压缩失败降级，总结/创建失败停止**：压缩失败只记录原因并继续；总结或新会话创建失败时立即返回 `error`，不执行不可逆的归档。
 - **不在插件内持久化配置**：本插件没有 `Config`，不读写 profile 的 `cordis.patch.yml`，符合 dsh 0.2.2 起的配置持久化规范。
 
 更细的调用链、事件结构与设计取舍见 [docs/ARCHITECTURE.md](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/ARCHITECTURE.md)。
 
 ## 兼容性
 
-当前基线：**dsh `0.2.2-rc.1`**，插件版本 **1.8.0**。
+当前基线：**dsh `0.2.2-rc.1`**，插件版本 **1.8.1**。
 
 - **门禁声明**：`package.json` 的 `engines.dsh` 为 `^0.2.2-rc.1`。dsh 0.2.1 起，只要插件声明了 `engines.dsh`，该范围就**单独决定**兼容性，`peerDependencies` 不再参与门禁比对；不满足时宿主会输出 `skipping profile bundle` 并整体跳过插件。
 - **peer 依赖**：`@deepseek-ai/cordis ^4.1.0`、`@deepseek-ai/dsh-agent-preset-registry ^0.2.2-rc.1`、`@deepseek-ai/dsh-llm ^0.2.2-rc.1`。peer 仍保留，供包管理器解析运行时。
 - **展示元数据**：`exports` 暴露 `./locale/*.json`、`./icon`、`./package.json`；`icon` 顶层字段与 `./icon` 导出都指向 `icon.svg`。宿主 `readPluginMeta` 据此生成 Plugins 页卡片。
 - **client 交付**：`dsh.client.platform: "web"` + `exports["./client"]`，满足浏览器组合脚本的扫描条件。
+- **跳转 API**：0.2.2 的 view selection 走 `ctx.uiWorkspace.openSession`；旧宿主回退 `ctx.sessions.open`。
 - **配置持久化**：不读写 profile 配置，不声明 `Config`，无密钥持久化需求。
+- **1.8.1 真机验证**：连续两次 `/fresh`、`/fresh minimal`、服务重启后 seed 历史加载、故障注入总结失败路径均通过（隔离 `DSH_HOME` + dsh 0.2.2-rc.1）。
 
 完整的版本矩阵、门禁规则、升级检查清单与历史验证结论见 [docs/COMPATIBILITY.md](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/COMPATIBILITY.md)。
 
@@ -219,8 +226,9 @@ client 插件监听 `archivedSessionIds` 的变化：发现老会话被归档后
 | 启动日志没有 `[fresh-start] installed` | 插件被门禁跳过，或未加入 profile bundles | 运行 `dsh --dump-config --profile web`，检查是否有 `skipping profile bundle` 与 `- id: fresh-start` |
 | `pending (waiting for services: agentPresets, workspaceRegistry)` | profile 缺少提供这两个服务的 `@deepseek-ai/dsh-web-app` | 确认 `dsh.profile.bundles` 含 `@deepseek-ai/dsh-web-app`；用完整 profile 初始化，而不是只装 base |
 | `/plugins/dsh-fresh-start/client.js` 返回 404 | 0.2.0 起 client 走组合脚本，裸包路径不再响应 | 检查带 `?rev=` 的组合脚本 URL：`plugins/??…,dsh-fresh-start/client.js,…&rev=<hash>` |
-| `dsh plugin add` 装到旧版本 | pnpm `minimumReleaseAge` 冷却 | 用精确版本 `dsh plugin --profile web add dsh-fresh-start@1.8.0` |
-| `/fresh` 创建了新会话但没有摘要 | 总结失败（provider/model 缺失、上下文超限、模型无文本） | 看返回文本中的 `summarization failed (…)`；检查会话模型与上下文大小 |
+| `dsh plugin add` 装到旧版本 | pnpm `minimumReleaseAge` 冷却 | 用精确版本 `dsh plugin --profile web add dsh-fresh-start@1.8.1` |
+| `/fresh` 报 `summarization failed`，没有新会话 | 总结失败（provider/model 缺失、上下文超限、模型无文本） | 旧会话未被归档；检查会话模型与上下文大小后重试 |
+| `/fresh <preset>` 被当成裸 `/fresh` 执行 | 旧版命令未声明 `input`，客户端菜单选择丢弃了参数 | 升级到 1.8.1+；确认 `command/run` 的 `args` 非空 |
 | 新会话已创建但界面没有自动跳转 | client 半边未加载，或新会话尚未同步到会话列表 | 确认 Plugins 页 client 已启用；稍等会话列表刷新，或手动打开新会话 |
 | 出现两个 `/fresh` | profile 的 `cordis.patch.yml` 手工挂载与 bundle 安装重复 | 删除手工挂载行，只保留插件管理器安装 |
 | `npm publish` 返回 403 | npm 账号启用了 2FA，普通 token 不能直接发布 | 使用带 bypass-2FA 权限的 token，或交互式 OTP 发布 |
@@ -233,10 +241,11 @@ npm install   # 安装 devDependencies：@deepseek-ai/dsh-llm 0.2.2-rc.1、@deep
 npm test
 ```
 
-测试不需要构建步骤，直接运行 ESM 源码。当前共 **66 条断言**：
+测试不需要构建步骤，直接运行 ESM 源码。当前共 **88 条断言**：
 
-- `tests/smoke_test.mjs`（57 条）：命令注册、全流程、空上下文、总结失败降级、创建失败仍归档、无 `workspaceRegistry` 降级、`parentSession` 标记、不污染 `deriveMessages()`、provider/model 回退、取消中止、header 异常、preset 参数与别名、Compact-First 四个分支。
-- `tests/client_test.mjs`（9 条）：归档后按 `parentId` 自动跳转、pending 兜底补跳、不相关归档不跳转、`sessions.open` 异常吞掉且不无限重试。
+- `tests/smoke_test.mjs`（69 条）：命令注册与 `input` 声明、全流程、空上下文、总结失败/创建失败不归档、无 `request/context` 时拒绝创建、seed 的 `request/header` / `request/context` 继承、无 `workspaceRegistry` 降级、`parentSession` 标记、不污染 `deriveMessages()`、provider/model 回退、取消中止、header 异常、preset 参数与别名、参数空白裁剪、Compact-First 分支、`ctx.get` 全局压缩与 `serviceFor` 兜底。
+- `tests/client_test.mjs`（13 条）：归档后按 `parentId` 自动跳转、pending 兜底补跳、归档时主动刷新会话列表、`uiWorkspace.openSession` 与旧宿主 `sessions.open` 回退、`sessions.open` 异常吞掉且不无限重试。
+- `tests/cordis_test.mjs`（6 条）：用真实 cordis 验证未 inject 的 `ctx.compaction` 会抛错、`ctx.get('compaction')` 能读取全局引擎、插件激活与 `/fresh` 全流程。
 
 项目结构：
 
@@ -249,7 +258,7 @@ dsh-fresh-start/
 ├── locale/{en,zh}.json       # Plugins 页显示元数据
 ├── icon.svg                  # Plugins 页图标
 ├── docs/                     # 架构、兼容性、Compact-First 规范
-└── tests/                    # smoke + client 测试
+└── tests/                    # smoke + client + cordis 测试
 ```
 
 ## 发布
@@ -258,7 +267,7 @@ dsh-fresh-start/
 npm publish     # prepublishOnly 会自动执行 npm test
 ```
 
-发布物由 `files` 白名单控制，只包含运行所需文件（当前实测 **10 个文件**，约 27 kB 压缩包 / 70 kB 解压后；`docs/` 与 `tests/` 不会进入安装包）：
+发布物由 `files` 白名单控制，只包含运行所需文件（当前实测 **10 个文件**，约 31 kB 压缩包 / 83 kB 解压后；`docs/` 与 `tests/` 不会进入安装包）：
 
 ```text
 lib/index.js  lib/client.js  cordis.patch.yml  locale/en.json  locale/zh.json
@@ -275,9 +284,11 @@ icon.svg  package.json  README.md  CHANGELOG.md  LICENSE
 
 ## 已知局限
 
-- **总结可能超出模型窗口**：总结请求包含 `deriveMessages()` 的完整上下文；超大会话若超过模型上下文上限，总结会失败。此时仍会创建新会话并归档老会话，只是新会话不带摘要。
+- **总结可能超出模型窗口**：总结请求包含 `deriveMessages()` 的完整上下文；超大会话若超过模型上下文上限，总结会失败。此时命令返回 `error`，不创建新会话、不归档老会话，旧会话保持可打开；修复模型/上下文问题后可重试 `/fresh`。
+- **空上下文不会执行任何操作**：`deriveMessages()` 为空时没有可继承的内容，命令返回 `error`，不创建空会话、不归档。
+- **旧会话缺少 `request/context` 时拒绝创建**：历史恢复需要模型路由元数据；正常会话在首轮请求后都会记录该事件。极旧的 seed 会话若没有，命令会返回 `cannot create seeded session (session log lacks request/context); old session kept (not archived)`，不会制造无法重新加载的新会话。
 - **总结可能不带 system 提示**：dsh 0.1.5 起，`session.requestHeader()` 的 canonical header 不再包含 `system`，系统提示改由 `createSystemMessage` / `systemPromptUpdate` 通道下发。插件会在 `system` 存在时透传，缺失时安全省略，因此总结质量可能略低于带系统提示的情况。这是已知的上游行为漂移，尚未改为从新通道提取。
-- **压缩不可逆**：Compact-First 对旧会话的 shadow 是持久化事实；由于旧会话随后被归档，这属于预期副作用。
+- **压缩不可逆**：Compact-First 对旧会话的 shadow 是持久化事实。若后续总结与创建成功，旧会话随后被归档；若总结失败，旧会话保留但可能已处于压缩后的状态。
 - **`minimal` preset 没有压缩引擎**：该模式下始终走纯对话式总结，行为等同于 v1.2.8。
 - **自动跳转依赖 client 半边**：在 headless / CLI 场景下没有浏览器运行时，`/fresh` 仍会创建和归档会话，但不会自动切换视图。
 

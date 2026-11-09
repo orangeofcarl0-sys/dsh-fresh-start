@@ -3,9 +3,9 @@
 | 项 | 值 |
 |---|---|
 | 状态 | Implemented（v1.2.9 起） |
-| 规范版本 | 1.1（2026-11-09 按 as-built 修订） |
+| 规范版本 | 1.2（2026-11-09 修复服务读取方式） |
 | 首次实现 | 1.2.9（2026-08-22） |
-| 适用插件版本 | 1.2.9 – 1.8.0 |
+| 适用插件版本 | 1.2.9 – 1.8.1 |
 | 目标读者 | 维护者、DSH 宿主集成方、测试与运维 |
 | 关联文档 | [README](../README.md)、[ARCHITECTURE.md](ARCHITECTURE.md)、[COMPATIBILITY.md](COMPATIBILITY.md) |
 
@@ -62,7 +62,7 @@ Compact-First 把总结策略改为：
 |---|---|
 | Compact-First | 先压缩、后总结的策略 |
 | 对话式总结 | 插件自组 `ctx.llm.stream` 请求、追加总结指令产出摘要的路径 |
-| 压缩引擎 | 提供 `compactNow` 的宿主服务；当前实现为全局 `ctx.compaction`，兼容 per-preset `serviceFor(agent, 'compaction')` |
+| 压缩引擎 | 提供 `compactNow` 的宿主服务；当前实现通过 `ctx.get('compaction')` 读取全局服务，兼容 per-preset `serviceFor(agent, 'compaction')` |
 | `compactNow` | 引擎的强制压缩入口：要求 idle agent，无可压缩范围时返回 `null` |
 | Shadow | 压缩把旧 surface 节点替换为摘要节点；`deriveMessages()` 因此不再包含被 shadow 的消息 |
 | 可用引擎 | 解析到实例且具有 `compactNow` 方法 |
@@ -84,12 +84,13 @@ Compact-First 把总结策略改为：
 ### 4.1 引擎选择
 
 ```js
-engine = ctx.compaction ?? ctx.agentPresets?.serviceFor?.(agent, 'compaction')
+engine = ctx.get('compaction') ?? ctx.agentPresets?.serviceFor?.(agent, 'compaction')
 ```
 
-- **第一优先**：`ctx.compaction`。dsh 0.1.2-alpha.5 起，compaction 是全局服务，与内置 `/compact` 使用同一个 seam，调用形状为 `compactNow(agent, signal, commandId)`。
+- **第一优先**：`ctx.get('compaction')`。`compaction` 是 cordis 的可选服务，不声明在 `inject` 中（否则没有压缩引擎的 profile 会一直 pending）；`ctx.get` 是无 inject 读取入口。
+- **不能直接读 `ctx.compaction`**：cordis 对未注入的服务属性会抛 `cannot get property "compaction" without inject`，`??` 后面的兜底不会执行。1.8.0 及更早版本因此在真实宿主上无法进入 Compact-First。
 - **兜底**：`ctx.agentPresets.serviceFor(agent, 'compaction')`。这是更早的 per-preset 形态，保留以兼容不同宿主线。
-- 查找本身抛错时返回 `compaction engine lookup failed (<message>)`。
+- 全局服务读取失败、缺失或无 `compactNow` 时走兜底；兜底查找本身抛错时返回 `compaction engine lookup failed (<message>)`。
 
 ### 4.2 执行流程
 
@@ -109,9 +110,19 @@ executeFresh(invocation):
 async function tryCompact(ctx, agent, signal, commandId) {
   let engine
   try {
-    engine = ctx.compaction ?? ctx.agentPresets?.serviceFor?.(agent, 'compaction')
-  } catch (error) {
-    return `compaction engine lookup failed (${error?.message ?? error})`
+    if (typeof ctx.get === 'function') {
+      const globalEngine = ctx.get('compaction')
+      if (globalEngine && typeof globalEngine.compactNow === 'function') engine = globalEngine
+    }
+  } catch {
+    // 全局服务不可读：继续尝试 serviceFor 兜底
+  }
+  if (engine === undefined) {
+    try {
+      engine = ctx.agentPresets?.serviceFor?.(agent, 'compaction')
+    } catch (error) {
+      return `compaction engine lookup failed (${error?.message ?? error})`
+    }
   }
   if (!engine || typeof engine.compactNow !== 'function') {
     return 'no compaction engine (preset lacks the compaction service)'
@@ -148,14 +159,15 @@ async function tryCompact(ctx, agent, signal, commandId) {
 | 无引擎 / 无 `compactNow` | `no compaction engine (preset lacks the compaction service)` |
 | 无可用范围（返回 `null`） | `compaction skipped (no compactable range)` |
 | 引擎抛错（含 busy） | `compaction skipped (<error message>)` |
-| 引擎查找抛错 | `compaction engine lookup failed (<error message>)` |
+| 全局服务读取抛错 | 继续尝试 `serviceFor`；兜底也没有引擎时 `no compaction engine…` |
+| 兜底 `serviceFor` 抛错 | `compaction engine lookup failed (<error message>)` |
 
 > 规范 0.1 曾提议返回 `{ ok, note }`；实现选择了更简单的字符串，因为调用方只需要展示文本，`ok` 没有被任何逻辑消费。本版按 as-built 修正。
 
 ### 4.4 与总结阶段的关系
 
 - 压缩只改变总结的**输入**，不替代总结；新会话的 seed 仍然来自对话式总结文本。
-- 压缩失败不是总结失败；总结失败也不是压缩失败。两个阶段各自独立降级。
+- 压缩失败只降级为纯对话式总结；总结失败则会终止后续创建/归档（旧会话保留）。两者互不掩盖。
 - 若取消信号在压缩期间触发，`compactNow` 可能抛出 abort 类错误，被捕获为 `compaction skipped (…)`；后续总结阶段仍会检查信号并中止。
 
 ## 5. 接口
@@ -183,8 +195,9 @@ async function tryCompact(
 | agent busy（turn 进行中） | `compactNow` 抛错 → 捕获为 `compaction skipped (…)`，继续总结 |
 | 会话过小、无可压范围 | `compactNow` 返回 `null` → `no compactable range`，继续总结 |
 | 压缩期间取消 | abort 被捕获 → 继续到总结阶段，由取消检查点终止 |
-| 压缩后上下文仍超限 | 总结自身失败 → 走既有降级：创建无 seed 的新会话并归档 |
+| 压缩后上下文仍超限 | 总结自身失败 → 返回 `error`，不创建、不归档，旧会话保留 |
 | 引擎返回结构缺少字段 | 节点数回退到 `shadowedRange` 计算，仍缺失则显示 `?` |
+| `ctx.get` 抛错或返回 `undefined` | 回退 `serviceFor`；两者都无引擎时 `no compaction engine…` |
 | `ctx.agentPresets` 不存在 | 可选链返回 `undefined` → `no compaction engine…` |
 
 ## 7. 验收标准
@@ -192,7 +205,7 @@ async function tryCompact(
 1. `standard` / `ptc` / `cordis` 等挂载了压缩引擎的 preset 下，会话有可压缩范围时：返回文本含 `compacted (shadowed N surface nodes)`，且总结请求的 messages 长度小于压缩前。
 2. `minimal` preset 下：返回文本含 `no compaction engine…`，总结行为与 v1.2.8 一致。
 3. 引擎 busy 或抛错时：返回文本含 `compaction skipped (…)`，总结仍执行。
-4. 无论压缩成功与否，新会话正常创建、旧会话正常归档、跳转正常。
+4. 在**总结成功**的前提下，无论压缩成功与否，新会话正常创建、旧会话正常归档、跳转正常。
 5. 无引擎时不出现引擎相关异常，所有失败被包含、不冒泡。
 6. 压缩成功后，`summarizeContext` 读取的是收紧后的 `deriveMessages()`。
 
@@ -207,24 +220,26 @@ async function tryCompact(
 | F-03 | `compactNow` 返回 `null` | 返回文本含 `compaction skipped (no compactable range)`；新会话仍创建 |
 | F-04 | `compactNow` 抛错 `manual compaction requires an idle agent` | 返回文本含该错误；不冒泡；新会话仍创建 |
 | F-05 | 压缩成功后的总结 | 压缩先于总结执行；总结仍只发一次 LLM 请求；messages 非空 |
+| F-06 | 真实 cordis 下未注入 `ctx.compaction` | 经 `ctx.get('compaction')` 读到全局引擎并产生 `compacted` note |
+| F-07 | `ctx.get` 读取抛错 | `serviceFor` 兜底仍生效并产生 `compacted` note |
 
-完整测试套件为 66 条断言（57 smoke + 9 client），`npm test` 全绿。
+完整测试套件为 88 条断言（69 smoke + 13 client + 6 cordis），`npm test` 全绿。
 
 ## 9. 风险
 
 | 风险 | 缓解 |
 |---|---|
 | `compactNow` 在命令 handler 中可能判定 busy | 捕获异常并降级为对话式总结（R3） |
-| 压缩不可逆（shadow 旧消息） | 旧会话随后被归档；压缩是「归档前的最后收紧」 |
+| 压缩不可逆（shadow 旧消息） | 成功路径下旧会话随后被归档；失败路径下旧会话保留但已处于压缩后状态 |
 | 压缩改变 token 计量影响会话 | 只影响旧会话；新会话以 seed 重建，无累积影响 |
 | 引擎接口在 dsh 升级后变化 | `typeof engine.compactNow === 'function'` 防御性检查，缺失即降级 |
-| 引擎查找本身抛错 | 单独 try/catch，返回 `compaction engine lookup failed` |
+| 引擎查找本身抛错 | 全局读取失败先回退；`serviceFor` 抛错时返回 `compaction engine lookup failed` |
 | `compactNow` 耗时过长 | 透传取消信号；取消后仍会进入总结阶段并由检查点终止 |
 
 ## 10. 兼容与回退
 
 - 无引擎或引擎不可用：行为与 v1.2.8 一致，仅返回文本多一段说明。
-- 有引擎：只在引擎可用、idle、有范围时压缩；任何失败都不阻断主流程。
+- 有引擎：只在引擎可用、idle、有范围时压缩；压缩环节的任何失败都不阻断主流程（总结失败时仍由归档安全策略终止）。
 - `/fresh <preset>`、别名、seed knob 预置、归档与跳转均不受影响。
 - 回退方式：删除 `tryCompact` 调用即可回到纯对话式总结；`summarizeContext` 无需改动。
 
@@ -235,3 +250,4 @@ async function tryCompact(
 | 0.1 | 2026-08-22 | 初始规范：CFS-001/002/003，待实现 |
 | 1.0 | 2026-08-22 | 随 v1.2.9 实现落地 |
 | 1.1 | 2026-11-09 | 按 as-built 修订：状态改为 Implemented；补充 `ctx.compaction` 全局服务优先与 `serviceFor` 兜底；接口返回类型由 `{ ok, note }` 修正为 `string`；补充引擎查找失败路径与测试映射 |
+| 1.2 | 2026-11-09 | 修复服务读取：改用 `ctx.get('compaction')`（直接读 `ctx.compaction` 在未 inject 时会抛错，导致兜底不执行）；补充 F-06/F-07 测试映射 |
