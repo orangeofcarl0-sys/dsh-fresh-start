@@ -298,6 +298,7 @@ icon.svg  package.json  README.md  CHANGELOG.md  LICENSE
 - [架构与实现](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/ARCHITECTURE.md)
 - [兼容性与升级指南](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/COMPATIBILITY.md)
 - [Compact-First 规范](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/COMPACT_FIRST_SPEC.md)
+- [Issue 自动关闭策略](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/docs/ISSUE_TRIAGE.md)
 - [更新日志](https://github.com/orangeofcarl0-sys/dsh-fresh-start/blob/master/CHANGELOG.md)
 
 ## License

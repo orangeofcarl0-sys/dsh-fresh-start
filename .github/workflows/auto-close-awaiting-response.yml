@@ -1,0 +1,131 @@
+name: Auto-close awaiting response
+
+# 只处理带有 awaiting-response 标签的 issue：
+# 最后一条人类评论来自维护者，且距今 >= 14 天时自动关闭。
+on:
+  schedule:
+    # 每天 03:17 UTC；GitHub Actions 的 cron 使用 UTC。
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only log what would be closed (no comments or state changes)'
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: auto-close-awaiting-response
+  cancel-in-progress: false
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const MAINTAINER_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
+            const EXEMPT_LABELS = new Set(['keep-open', 'security'])
+            const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+            const rawDryRun = context.payload.inputs?.dry_run
+            const dryRun = rawDryRun === true || rawDryRun === 'true'
+
+            const isBot = (user) =>
+              !user || user.type === 'Bot' || /\[bot\]$/i.test(user.login || '')
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              labels: 'awaiting-response',
+              per_page: 100,
+            })
+
+            let closed = 0
+            let skipped = 0
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue
+
+              const labels = new Set(
+                (issue.labels ?? []).map((label) =>
+                  typeof label === 'string' ? label : label.name,
+                ),
+              )
+              if ([...EXEMPT_LABELS].some((label) => labels.has(label))) {
+                core.info(`#${issue.number}: exempt label, skip`)
+                skipped += 1
+                continue
+              }
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issue.number,
+                per_page: 100,
+              })
+
+              // 忽略机器人评论；没有人类评论时不自动关闭。
+              const last = [...comments].reverse().find((comment) => !isBot(comment.user))
+              if (!last) {
+                core.info(`#${issue.number}: no human comments, skip`)
+                skipped += 1
+                continue
+              }
+
+              // 报告者最后回复过：我们在等自己处理，不能自动关闭。
+              if (last.user.login === issue.user.login) {
+                core.info(`#${issue.number}: last comment is from reporter, skip`)
+                skipped += 1
+                continue
+              }
+
+              if (!MAINTAINER_ASSOCIATIONS.has(last.author_association)) {
+                core.info(`#${issue.number}: last comment is not from maintainer (${last.author_association}), skip`)
+                skipped += 1
+                continue
+              }
+
+              const age = Date.now() - new Date(last.created_at).getTime()
+              if (age < MAX_AGE_MS) {
+                core.info(`#${issue.number}: only ${Math.floor(age / 86400000)}d since maintainer reply, skip`)
+                skipped += 1
+                continue
+              }
+
+              if (dryRun) {
+                core.info(`#${issue.number}: would close (dry run)`)
+                continue
+              }
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: [
+                  'Closing this issue after 14 days without a response to our last message.',
+                  '',
+                  'If this is still relevant, comment and we will reopen it.',
+                  '',
+                  '本侧上次回复后 14 天未收到回复，自动关闭。如仍需处理，请回复，我们会重新打开。',
+                ].join('\n'),
+              })
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned',
+              })
+              closed += 1
+              core.info(`#${issue.number}: closed`)
+            }
+
+            core.info(`Auto-close complete: ${closed} closed, ${skipped} skipped${dryRun ? ' (dry run)' : ''}.`)
