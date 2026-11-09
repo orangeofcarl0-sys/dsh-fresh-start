@@ -1,7 +1,8 @@
 # dsh-fresh-start
 
 [![npm version](https://img.shields.io/npm/v/dsh-fresh-start.svg)](https://www.npmjs.com/package/dsh-fresh-start)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-fresh-start.svg)](https://www.npmjs.com/package/dsh-fresh-start)
+[![npm monthly downloads](https://img.shields.io/npm/dm/dsh-fresh-start.svg?label=monthly%20downloads)](https://www.npmjs.com/package/dsh-fresh-start)
+[![npm total downloads](https://img.shields.io/npm/dt/dsh-fresh-start.svg?label=total%20downloads)](https://www.npmjs.com/package/dsh-fresh-start)
 [![dsh](https://img.shields.io/badge/dsh-0.2.2--rc.1-green)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
